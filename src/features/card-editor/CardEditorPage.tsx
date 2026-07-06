@@ -1,23 +1,28 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 import {
+  useAnswerSections,
   useCard,
   useCategory,
+  useCreateAnswerSection,
   useCreateQuestionImage,
   useDeck,
   useDeleteQuestionImage,
   useQuestionImages,
   useTags,
+  useUpdateAnswerSection,
   useUpdateCard,
   useUpdateQuestionImage,
 } from '../../api/hooks';
 import { uploadImageFile } from '../../api/resources';
+import type { CardAnswerSection } from '../../api/types';
 import { Breadcrumbs } from '../../components/Breadcrumbs';
 import type { Crumb } from '../../components/Breadcrumbs';
 import { Button } from '../../components/Button';
 import { ErrorBanner, errorMessage } from '../../components/ErrorBanner';
 import { PageLoading } from '../../components/Spinner';
 import { useToast } from '../../components/Toast';
+import { AnswerSectionEditor } from './AnswerSectionEditor';
 import { ImageStrip, nextSequenceNumber } from './ImageStrip';
 import type { StripImage } from './ImageStrip';
 
@@ -33,6 +38,9 @@ export function CardEditorPage() {
   const createQuestionImage = useCreateQuestionImage();
   const updateQuestionImage = useUpdateQuestionImage();
   const deleteQuestionImage = useDeleteQuestionImage();
+  const sections = useAnswerSections(cardId ?? '');
+  const createSection = useCreateAnswerSection();
+  const updateSectionForSwap = useUpdateAnswerSection();
 
   const [question, setQuestion] = useState('');
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
@@ -104,6 +112,38 @@ export function CardEditorPage() {
   const removeQuestionImage = (image: StripImage) =>
     deleteQuestionImage.mutate(image.id, { onError: (err) => showToast(errorMessage(err)) });
 
+  const sortedSections = [...(sections.data ?? [])].sort(
+    (a, b) => a.sequenceNumber - b.sequenceNumber,
+  );
+
+  const addSection = () =>
+    createSection.mutate(
+      {
+        cardID: card.data.id,
+        sequenceNumber: nextSequenceNumber(sections.data ?? []),
+        title: '',
+        answer: '',
+      },
+      { onError: (err) => showToast(errorMessage(err)) },
+    );
+
+  const swapSections = async (a: CardAnswerSection, b: CardAnswerSection) => {
+    try {
+      await Promise.all([
+        updateSectionForSwap.mutateAsync({
+          id: a.id,
+          body: { sequenceNumber: b.sequenceNumber, title: a.title, answer: a.answer },
+        }),
+        updateSectionForSwap.mutateAsync({
+          id: b.id,
+          body: { sequenceNumber: a.sequenceNumber, title: b.title, answer: b.answer },
+        }),
+      ]);
+    } catch (err) {
+      showToast(errorMessage(err));
+    }
+  };
+
   const crumbs: Crumb[] = [{ label: 'Home', to: '/' }];
   if (category.data) {
     crumbs.push({ label: category.data.name, to: `/categories/${category.data.id}` });
@@ -164,7 +204,25 @@ export function CardEditorPage() {
           onSwap={swapQuestionImages}
         />
       </section>
-      {/* Answer sections: Task 14 */}
+      <section className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Answer sections</h2>
+          <Button variant="secondary" onClick={addSection} disabled={createSection.isPending}>
+            Add section
+          </Button>
+        </div>
+        {sortedSections.map((s, i) => (
+          <AnswerSectionEditor
+            key={s.id}
+            section={s}
+            index={i}
+            isFirst={i === 0}
+            isLast={i === sortedSections.length - 1}
+            onMoveUp={() => swapSections(sortedSections[i - 1], s)}
+            onMoveDown={() => swapSections(s, sortedSections[i + 1])}
+          />
+        ))}
+      </section>
     </div>
   );
 }
