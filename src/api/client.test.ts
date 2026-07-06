@@ -61,7 +61,7 @@ test('throws ApiError with the backend message on non-2xx', async () => {
       HttpResponse.json({ message: 'Not Found' }, { status: 404 }),
     ),
   );
-  const err = await request('GET', '/category', { params: { id: 'nope' } }).catch((e) => e);
+  const err = (await request('GET', '/category', { params: { id: 'nope' } }).catch((e) => e)) as ApiError;
   expect(err).toBeInstanceOf(ApiError);
   expect(err.status).toBe(404);
   expect(err.message).toBe('Not Found');
@@ -73,7 +73,7 @@ test('falls back to a status message when the error body is not JSON', async () 
       new HttpResponse('<html>gateway error</html>', { status: 502 }),
     ),
   );
-  const err = await request('GET', '/categories').catch((e) => e);
+  const err = (await request('GET', '/categories').catch((e) => e)) as ApiError;
   expect(err).toBeInstanceOf(ApiError);
   expect(err.status).toBe(502);
   expect(err.message).toBe('Request failed with status 502');
