@@ -1,12 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
-import { useCard, useCategory, useDeck, useTags, useUpdateCard } from '../../api/hooks';
+import {
+  useCard,
+  useCategory,
+  useCreateQuestionImage,
+  useDeck,
+  useDeleteQuestionImage,
+  useQuestionImages,
+  useTags,
+  useUpdateCard,
+  useUpdateQuestionImage,
+} from '../../api/hooks';
+import { uploadImageFile } from '../../api/resources';
 import { Breadcrumbs } from '../../components/Breadcrumbs';
 import type { Crumb } from '../../components/Breadcrumbs';
 import { Button } from '../../components/Button';
 import { ErrorBanner, errorMessage } from '../../components/ErrorBanner';
 import { PageLoading } from '../../components/Spinner';
 import { useToast } from '../../components/Toast';
+import { ImageStrip, nextSequenceNumber } from './ImageStrip';
+import type { StripImage } from './ImageStrip';
 
 export function CardEditorPage() {
   const { cardId } = useParams<{ cardId: string }>();
@@ -16,6 +29,10 @@ export function CardEditorPage() {
   const tags = useTags();
   const updateCard = useUpdateCard();
   const { showToast } = useToast();
+  const questionImages = useQuestionImages(cardId ?? '');
+  const createQuestionImage = useCreateQuestionImage();
+  const updateQuestionImage = useUpdateQuestionImage();
+  const deleteQuestionImage = useDeleteQuestionImage();
 
   const [question, setQuestion] = useState('');
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
@@ -53,6 +70,39 @@ export function CardEditorPage() {
         onError: (err) => showToast(errorMessage(err)),
       },
     );
+
+  const uploadQuestionImage = async (file: File) => {
+    try {
+      const imageUrl = await uploadImageFile(file, 'question');
+      await createQuestionImage.mutateAsync({
+        cardID: card.data.id,
+        sequenceNumber: nextSequenceNumber(questionImages.data ?? []),
+        imageURL: imageUrl,
+      });
+    } catch (err) {
+      showToast(errorMessage(err));
+    }
+  };
+
+  const swapQuestionImages = async (a: StripImage, b: StripImage) => {
+    try {
+      await Promise.all([
+        updateQuestionImage.mutateAsync({
+          id: a.id,
+          body: { sequenceNumber: b.sequenceNumber, imageURL: a.imageURL },
+        }),
+        updateQuestionImage.mutateAsync({
+          id: b.id,
+          body: { sequenceNumber: a.sequenceNumber, imageURL: b.imageURL },
+        }),
+      ]);
+    } catch (err) {
+      showToast(errorMessage(err));
+    }
+  };
+
+  const removeQuestionImage = (image: StripImage) =>
+    deleteQuestionImage.mutate(image.id, { onError: (err) => showToast(errorMessage(err)) });
 
   const crumbs: Crumb[] = [{ label: 'Home', to: '/' }];
   if (category.data) {
@@ -105,7 +155,15 @@ export function CardEditorPage() {
         </div>
       </section>
 
-      {/* Question images: Task 13 */}
+      <section className="rounded-lg border border-gray-200 bg-white p-5">
+        <ImageStrip
+          title="Question images"
+          images={questionImages.data ?? []}
+          onUpload={uploadQuestionImage}
+          onDelete={removeQuestionImage}
+          onSwap={swapQuestionImages}
+        />
+      </section>
       {/* Answer sections: Task 14 */}
     </div>
   );
