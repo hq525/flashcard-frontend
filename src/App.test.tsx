@@ -1,7 +1,14 @@
-import { render, screen } from '@testing-library/react';
-import App from './App';
+import { screen } from '@testing-library/react';
+import { renderApp } from './test/utils';
 
-test('renders the app title', () => {
-  render(<App />);
-  expect(screen.getByRole('heading', { name: 'Flashcards' })).toBeInTheDocument();
+test('renders the header brand and Tags nav link', () => {
+  renderApp('/some-unknown-path');
+  expect(screen.getByRole('link', { name: 'Flashcards' })).toHaveAttribute('href', '/');
+  expect(screen.getByRole('link', { name: 'Tags' })).toHaveAttribute('href', '/tags');
+});
+
+test('unknown routes render the not-found page', () => {
+  renderApp('/some-unknown-path');
+  expect(screen.getByText('Page not found')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Back to categories' })).toHaveAttribute('href', '/');
 });
