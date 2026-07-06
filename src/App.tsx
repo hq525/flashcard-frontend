@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from 'react-router';
 import { ToastProvider } from './components/Toast';
 import { CategoriesPage } from './features/categories/CategoriesPage';
 import { NotFoundPage } from './features/NotFoundPage';
+import { TagsPage } from './features/tags/TagsPage';
 import { Layout } from './layout/Layout';
 
 export function AppRoutes() {
@@ -10,6 +11,7 @@ export function AppRoutes() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<CategoriesPage />} />
+        <Route path="/tags" element={<TagsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
