@@ -22,7 +22,7 @@ test('prefills the question and tag selections', async () => {
   useEditorHandlers(makeCard({ tags: ['tag-1'] }));
   renderApp('/cards/card-1');
   expect(await screen.findByLabelText('Question')).toHaveValue('What is a mitochondrion?');
-  expect(screen.getByRole('checkbox', { name: 'exam' })).toBeChecked();
+  expect(await screen.findByRole('checkbox', { name: 'exam' })).toBeChecked();
   expect(screen.getByRole('checkbox', { name: 'hard' })).not.toBeChecked();
 });
 
@@ -42,7 +42,7 @@ test('saves the full payload, preserving memorized and omitting empty lastAccess
   const question = await screen.findByLabelText('Question');
   await user.clear(question);
   await user.type(question, 'Updated?');
-  await user.click(screen.getByRole('checkbox', { name: 'hard' }));
+  await user.click(await screen.findByRole('checkbox', { name: 'hard' }));
   await user.click(screen.getByRole('button', { name: 'Save' }));
 
   await waitFor(() => expect(putId).toBe('card-1'));

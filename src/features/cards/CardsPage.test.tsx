@@ -14,9 +14,8 @@ function useDeckPageHandlers(cards = [makeCard()]) {
       expect(new URL(req.url).searchParams.get('deckId')).toBe('deck-1');
       return HttpResponse.json(cards);
     }),
-    // The create test navigates to /cards/card-2. Once Task 12 registers the
-    // editor route, that page fetches these; register them so the suite has
-    // no unhandled requests after Task 12 lands.
+    // The create test navigates to /cards/card-2; the editor page fetches
+    // these on arrival.
     http.get('http://localhost:8080/card', () =>
       HttpResponse.json(makeCard({ id: 'card-2', question: 'What is DNA?' })),
     ),
@@ -59,7 +58,7 @@ test('creates a card with tags and navigates toward its editor', async () => {
   await waitFor(() =>
     expect(postBody).toEqual({ deckID: 'deck-1', question: 'What is DNA?', tags: ['tag-1'] }),
   );
-  // Editor route is registered in Task 12; until then navigation lands on not-found.
+  // Navigation to the editor closes the dialog.
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 });
 
