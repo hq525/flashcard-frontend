@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes } from 'react-router';
 import { ToastProvider } from './components/Toast';
 import { CategoriesPage } from './features/categories/CategoriesPage';
+import { DecksPage } from './features/decks/DecksPage';
 import { NotFoundPage } from './features/NotFoundPage';
 import { TagsPage } from './features/tags/TagsPage';
 import { Layout } from './layout/Layout';
@@ -12,6 +13,7 @@ export function AppRoutes() {
       <Route element={<Layout />}>
         <Route index element={<CategoriesPage />} />
         <Route path="/tags" element={<TagsPage />} />
+        <Route path="/categories/:categoryId" element={<DecksPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
