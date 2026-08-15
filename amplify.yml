@@ -1,0 +1,22 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        # Amplify's default build image may ship an older Node than Vite needs.
+        - nvm install 22
+        - nvm use 22
+        - npm ci
+    build:
+      commands:
+        # VITE_API_BASE_URL and VITE_API_KEY come from the Amplify console's
+        # environment variables — Vite reads VITE_-prefixed shell vars, so no
+        # .env file is needed (and no key is committed).
+        - npm run build
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
