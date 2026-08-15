@@ -31,10 +31,25 @@ export const queryKeys = {
   sectionImages: (sectionId: string) => ['section-images', sectionId] as const,
 };
 
+// The backend lists come from DynamoDB GSI queries, which return items in an
+// unspecified order that can change between requests. Sorting here keeps every
+// screen stable. Defined at module scope so the reference is stable and
+// TanStack Query can memoize the result.
+
+const byName = <T extends { name: string }>(items: T[]): T[] =>
+  [...items].sort((a, b) => a.name.localeCompare(b.name));
+
+const byCreatedDateTime = <T extends { createdDateTime: string }>(items: T[]): T[] =>
+  [...items].sort((a, b) => a.createdDateTime.localeCompare(b.createdDateTime));
+
 // --- Categories ---
 
 export function useCategories() {
-  return useQuery({ queryKey: queryKeys.categories, queryFn: categoriesApi.list });
+  return useQuery({
+    queryKey: queryKeys.categories,
+    queryFn: categoriesApi.list,
+    select: byName,
+  });
 }
 
 export function useCategory(id: string | undefined) {
@@ -82,6 +97,7 @@ export function useDecks(categoryId: string) {
   return useQuery({
     queryKey: queryKeys.decks(categoryId),
     queryFn: () => decksApi.list(categoryId),
+    select: byName,
   });
 }
 
@@ -128,7 +144,7 @@ export function useDeleteDeck() {
 // --- Tags ---
 
 export function useTags() {
-  return useQuery({ queryKey: queryKeys.tags, queryFn: tagsApi.list });
+  return useQuery({ queryKey: queryKeys.tags, queryFn: tagsApi.list, select: byName });
 }
 
 export function useCreateTag() {
@@ -158,7 +174,11 @@ export function useDeleteTag() {
 // --- Cards ---
 
 export function useCards(deckId: string) {
-  return useQuery({ queryKey: queryKeys.cards(deckId), queryFn: () => cardsApi.list(deckId) });
+  return useQuery({
+    queryKey: queryKeys.cards(deckId),
+    queryFn: () => cardsApi.list(deckId),
+    select: byCreatedDateTime,
+  });
 }
 
 export function useCard(id: string | undefined) {
