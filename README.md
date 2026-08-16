@@ -30,6 +30,30 @@ npm run build      # type-check + production build into dist/
 npm run preview    # serve the production build locally
 ```
 
+## Deployment (AWS Amplify Hosting)
+
+**Prerequisites:** an AWS account, this repo pushed to GitHub, and the backend already deployed (see the [Flashcard-Lambda README](../Flashcard-Lambda/README.md#deployment-sam) for how to get its API URL and key).
+
+**First-time setup**, in the AWS Console under Amplify → Hosting:
+
+1. **New app → Host web app**, connect this GitHub repo and branch. Amplify auto-detects the `amplify.yml` already in the repo (installs Node 22, runs `npm ci && npm run build`, deploys `dist/`).
+2. **App settings → Environment variables**, add:
+
+   | Variable | Value |
+   |---|---|
+   | `VITE_API_BASE_URL` | The deployed API Gateway stage URL, e.g. `aws cloudformation describe-stacks --stack-name <stack> --query 'Stacks[0].Outputs'` |
+   | `VITE_API_KEY` | `aws apigateway get-api-keys --include-values --query 'items[].{name:name,value:value}'` |
+
+3. **App settings → Rewrites and redirects** — this is a client-side-routed SPA (react-router), so every path needs to fall back to `index.html`:
+
+   | Source address | Target address | Type |
+   |---|---|---|
+   | `</^[^.]+$\|\.(?!(css\|gif\|ico\|jpg\|js\|png\|txt\|svg\|woff\|woff2\|ttf\|map\|json)$)([^.]+$)/>` | `/index.html` | `200 (Rewrite)` |
+
+4. **Save and deploy.**
+
+**Subsequent deploys:** push to the connected branch — Amplify rebuilds and redeploys automatically.
+
 ## Structure
 
 - `src/api/` — backend contract: config, fetch client, types, resource functions, TanStack Query hooks
