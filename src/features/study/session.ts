@@ -9,8 +9,9 @@ export interface StudyOptions {
 
 const dayMs = 24 * 60 * 60 * 1000;
 
-// Legacy records carry 0 (attribute absent in DynamoDB): treat as box 1.
-const clampBox = (box: number) => Math.min(Math.max(box, 1), 5);
+// Legacy records carry 0 (attribute absent in DynamoDB) and a pre-Leitner
+// backend omits the field entirely (undefined): both mean box 1.
+const clampBox = (box: number | undefined) => Math.min(Math.max(box || 1, 1), 5);
 
 // Leitner schedule: box 1..5 reviewed every 1, 2, 4, 8, 16 days.
 const intervalMs = (box: number) => 2 ** (clampBox(box) - 1) * dayMs;

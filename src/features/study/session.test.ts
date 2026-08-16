@@ -24,6 +24,9 @@ test('due follows doubling intervals per box (1, 2, 4, 8, 16 days)', () => {
 test('legacy cards without a box behave as box 1', () => {
   expect(isDue(makeCard({ leitnerBox: 0, lastAccessedDateTime: daysAgo(1) }), now)).toBe(true);
   expect(isDue(makeCard({ leitnerBox: 0, lastAccessedDateTime: daysAgo(0.5) }), now)).toBe(false);
+  // A pre-Leitner backend omits the field entirely; still due like box 1.
+  const noField = makeCard({ leitnerBox: undefined as unknown as number, lastAccessedDateTime: daysAgo(1) });
+  expect(isDue(noField, now)).toBe(true);
 });
 
 test('nextBox promotes on success (capped at 5) and demotes to 1 on failure', () => {
