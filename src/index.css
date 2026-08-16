@@ -1,1 +1,10 @@
 @import "tailwindcss";
+
+/* Tailwind v4 preflight sets buttons to cursor: default; restore the
+   pointer for enabled buttons (disabled ones keep their own cursor). */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}

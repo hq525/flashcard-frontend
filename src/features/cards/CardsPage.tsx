@@ -25,12 +25,26 @@ export function CardsPage() {
 
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Card | null>(null);
+  const [filterTagIds, setFilterTagIds] = useState<string[]>([]);
 
   if (deck.isPending || cards.isPending) return <PageLoading />;
   if (deck.isError) return <ErrorBanner error={deck.error} onRetry={() => deck.refetch()} />;
   if (cards.isError) return <ErrorBanner error={cards.error} onRetry={() => cards.refetch()} />;
 
   const tagName = (id: string) => tags.data?.find((tag) => tag.id === id)?.name;
+
+  // Only offer tags that appear on at least one card in this deck.
+  const usedTagIds = new Set(cards.data.flatMap((card) => card.tags ?? []));
+  const filterTags = (tags.data ?? []).filter((tag) => usedTagIds.has(tag.id));
+
+  const toggleFilterTag = (id: string) =>
+    setFilterTagIds((prev) =>
+      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
+    );
+
+  const visibleCards = cards.data.filter((card) =>
+    filterTagIds.every((id) => (card.tags ?? []).includes(id)),
+  );
 
   const crumbs: Crumb[] = [{ label: 'Home', to: '/' }];
   if (category.data) {
@@ -56,11 +70,43 @@ export function CardsPage() {
         </div>
       </div>
 
+      {filterTags.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-sm text-gray-500">Filter:</span>
+          {filterTags.map((tag) => {
+            const active = filterTagIds.includes(tag.id);
+            return (
+              <button
+                key={tag.id}
+                type="button"
+                aria-label={`Filter by ${tag.name}`}
+                aria-pressed={active}
+                onClick={() => toggleFilterTag(tag.id)}
+                className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                  active
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                }`}
+              >
+                {tag.name}
+              </button>
+            );
+          })}
+          {filterTagIds.length > 0 && (
+            <Button variant="ghost" onClick={() => setFilterTagIds([])}>
+              Clear
+            </Button>
+          )}
+        </div>
+      )}
+
       {cards.data.length === 0 ? (
         <EmptyState message="No cards yet. Create one to start building this deck." />
+      ) : visibleCards.length === 0 ? (
+        <EmptyState message="No cards match the selected tags." />
       ) : (
         <ul className="flex flex-col gap-3">
-          {cards.data.map((card) => (
+          {visibleCards.map((card) => (
             <li
               key={card.id}
               className="flex items-start justify-between gap-4 rounded-lg border border-gray-200 bg-white px-4 py-3"
