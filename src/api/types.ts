@@ -30,6 +30,8 @@ export interface Card {
   updatedDateTime: string;
   lastAccessedDateTime: string;
   memorized: boolean;
+  // Leitner spaced-repetition box, 1-5; 0 on legacy records means box 1.
+  leitnerBox: number;
 }
 
 export interface CardAnswerSection {
@@ -93,6 +95,8 @@ export interface UpdateCardRequest {
   tags: string[];
   memorized: boolean;
   lastAccessedDateTime?: string;
+  // Omit (or 0) to leave the stored box unchanged.
+  leitnerBox?: number;
 }
 
 export interface CreateCardAnswerSectionRequest {

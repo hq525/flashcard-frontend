@@ -79,14 +79,19 @@ export function CardEditorPage() {
       },
     );
 
-  const uploadQuestionImage = async (file: File) => {
+  // Sequence numbers are assigned locally so a multi-file batch doesn't race
+  // the query cache between uploads.
+  const uploadQuestionImages = async (files: File[]) => {
     try {
-      const imageUrl = await uploadImageFile(file, 'question');
-      await createQuestionImage.mutateAsync({
-        cardID: card.data.id,
-        sequenceNumber: nextSequenceNumber(questionImages.data ?? []),
-        imageURL: imageUrl,
-      });
+      let sequenceNumber = nextSequenceNumber(questionImages.data ?? []);
+      for (const file of files) {
+        const imageUrl = await uploadImageFile(file, 'question');
+        await createQuestionImage.mutateAsync({
+          cardID: card.data.id,
+          sequenceNumber: sequenceNumber++,
+          imageURL: imageUrl,
+        });
+      }
     } catch (err) {
       showToast(errorMessage(err));
     }
@@ -168,7 +173,7 @@ export function CardEditorPage() {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             rows={4}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+            className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 focus:outline-none sm:text-sm"
           />
         </label>
         {tags.data && tags.data.length > 0 && (
@@ -199,7 +204,7 @@ export function CardEditorPage() {
         <ImageStrip
           title="Question images"
           images={questionImages.data ?? []}
-          onUpload={uploadQuestionImage}
+          onUpload={uploadQuestionImages}
           onDelete={removeQuestionImage}
           onSwap={swapQuestionImages}
         />

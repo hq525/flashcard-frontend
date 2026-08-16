@@ -33,6 +33,7 @@ export function makeCard(overrides: Partial<Card> = {}): Card {
     updatedDateTime: TS,
     lastAccessedDateTime: '',
     memorized: false,
+    leitnerBox: 1,
     ...overrides,
   };
 }

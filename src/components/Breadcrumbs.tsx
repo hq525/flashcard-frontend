@@ -1,4 +1,5 @@
 import { Link } from 'react-router';
+import { ChevronRightIcon } from './icons';
 
 export interface Crumb {
   label: string;
@@ -11,7 +12,7 @@ export function Breadcrumbs({ items }: { items: Crumb[] }) {
       <ol className="flex flex-wrap items-center gap-1">
         {items.map((item, i) => (
           <li key={i} className="flex items-center gap-1">
-            {i > 0 && <span aria-hidden>›</span>}
+            {i > 0 && <ChevronRightIcon className="h-3 w-3 text-gray-400" />}
             {item.to ? (
               <Link to={item.to} className="hover:text-gray-900 hover:underline">
                 {item.label}

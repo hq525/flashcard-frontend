@@ -3,6 +3,12 @@
 /* Tailwind v4 preflight sets buttons to cursor: default; restore the
    pointer for enabled buttons (disabled ones keep their own cursor). */
 @layer base {
+  /* The app background lives on the body so overscroll and mid-animation
+     document shrinking (e.g. the study card flip) never expose white. */
+  body {
+    @apply bg-gray-50;
+  }
+
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;

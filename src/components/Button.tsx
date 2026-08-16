@@ -9,16 +9,16 @@ const variants = {
 
 export type ButtonVariant = keyof typeof variants;
 
+// Also used to style Links as buttons (e.g. "Study") so they can't drift
+// out of sync with real Buttons.
+export function buttonClassName(variant: ButtonVariant = 'primary', className = ''): string {
+  return `inline-flex min-h-11 touch-manipulation items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 focus-visible:outline-none disabled:cursor-not-allowed ${variants[variant]} ${className}`;
+}
+
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
 }
 
 export function Button({ variant = 'primary', className = '', type = 'button', ...rest }: ButtonProps) {
-  return (
-    <button
-      type={type}
-      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed ${variants[variant]} ${className}`}
-      {...rest}
-    />
-  );
+  return <button type={type} className={buttonClassName(variant, className)} {...rest} />;
 }

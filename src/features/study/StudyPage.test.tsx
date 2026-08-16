@@ -35,11 +35,17 @@ test('runs a full session: reveal, answer both cards, see summary', async () => 
 
   expect(screen.getByText('Card 1 of 2')).toBeInTheDocument();
   expect(screen.getByText('What is a mitochondrion?')).toBeInTheDocument();
-  expect(screen.queryByText('The powerhouse of the cell.')).not.toBeInTheDocument();
+  // The answer face is pre-rendered on the back of the card but hidden.
+  expect(
+    screen.getByText('The powerhouse of the cell.').closest('[aria-hidden="true"]'),
+  ).not.toBeNull();
+  expect(screen.queryByRole('button', { name: 'Got it' })).not.toBeInTheDocument();
 
-  await user.click(screen.getByRole('button', { name: 'Reveal answer' }));
+  await user.click(screen.getByRole('button', { name: 'Flip card' }));
   expect(screen.getByText('Definition')).toBeInTheDocument();
-  expect(screen.getByText('The powerhouse of the cell.')).toBeInTheDocument();
+  expect(
+    screen.getByText('The powerhouse of the cell.').closest('[aria-hidden="true"]'),
+  ).toBeNull();
 
   await user.click(screen.getByRole('button', { name: 'Got it' }));
   expect(await screen.findByText('Card 2 of 2')).toBeInTheDocument();
@@ -48,26 +54,82 @@ test('runs a full session: reveal, answer both cards, see summary', async () => 
   expect(puts[0].body.question).toBe('What is a mitochondrion?');
   expect(puts[0].body.tags).toEqual(['tag-1']);
   expect(puts[0].body.memorized).toBe(true);
+  // Got it promotes the card out of Leitner box 1.
+  expect(puts[0].body.leitnerBox).toBe(2);
   const stamp = new Date(puts[0].body.lastAccessedDateTime as string).getTime();
   expect(stamp).toBeGreaterThan(Date.now() - 60_000);
 
-  await user.click(screen.getByRole('button', { name: 'Reveal answer' }));
+  await user.click(screen.getByRole('button', { name: 'Flip card' }));
   await user.click(screen.getByRole('button', { name: 'Not yet' }));
 
   expect(await screen.findByText('Session complete')).toBeInTheDocument();
   expect(puts[1].body.memorized).toBe(false);
+  // Not yet demotes back to box 1.
+  expect(puts[1].body.leitnerBox).toBe(1);
   expect(screen.getByText(/Got it: 1/)).toBeInTheDocument();
   expect(screen.getByText(/Not yet: 1/)).toBeInTheDocument();
+});
+
+test('active study shows a Quit link back to the deck', async () => {
+  const user = userEvent.setup();
+  useStudyHandlers([makeCard()]);
+  renderApp('/decks/deck-1/study');
+  await user.click(await screen.findByRole('button', { name: 'Start studying' }));
+
+  expect(screen.getByRole('link', { name: 'Quit' })).toHaveAttribute('href', '/decks/deck-1');
+});
+
+test('clicking a flipped card flips it back to the question', async () => {
+  const user = userEvent.setup();
+  useStudyHandlers([makeCard()]);
+  renderApp('/decks/deck-1/study');
+  await user.click(await screen.findByRole('button', { name: 'Start studying' }));
+
+  const flip = screen.getByRole('button', { name: 'Flip card' });
+  await user.click(flip);
+  expect(screen.getByRole('button', { name: 'Got it' })).toBeInTheDocument();
+
+  await user.click(flip);
+  expect(screen.queryByRole('button', { name: 'Got it' })).not.toBeInTheDocument();
+  expect(
+    screen.getByText('The powerhouse of the cell.').closest('[aria-hidden="true"]'),
+  ).not.toBeNull();
 });
 
 test('unmemorized-only with no unmemorized cards disables start and explains', async () => {
   const user = userEvent.setup();
   useStudyHandlers([makeCard({ memorized: true })]);
   renderApp('/decks/deck-1/study');
-  await user.click(await screen.findByRole('checkbox', { name: 'Unmemorized only' }));
+  await user.click(await screen.findByRole('radio', { name: 'Unmemorized only' }));
 
   expect(screen.getByText(/All cards in this deck are memorized/)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Start studying' })).toBeDisabled();
+});
+
+test('due mode counts only due cards and disables start when nothing is due', async () => {
+  useStudyHandlers([
+    // Box 5 card reviewed moments ago: not due for 16 days.
+    makeCard({ leitnerBox: 5, lastAccessedDateTime: new Date().toISOString() }),
+  ]);
+  renderApp('/decks/deck-1/study');
+
+  expect(await screen.findByRole('radio', { name: 'Due for review (0)' })).toBeChecked();
+  expect(screen.getByText(/Nothing is due right now/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Start studying' })).toBeDisabled();
+});
+
+test('due mode queues the weakest cards first', async () => {
+  const user = userEvent.setup();
+  const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
+  useStudyHandlers([
+    makeCard({ id: 'strong', question: 'Strong card', leitnerBox: 3, lastAccessedDateTime: daysAgo(5) }),
+    makeCard({ id: 'weak', question: 'Weak card', leitnerBox: 1, lastAccessedDateTime: daysAgo(2) }),
+  ]);
+  renderApp('/decks/deck-1/study');
+  await user.click(await screen.findByRole('button', { name: 'Start studying' }));
+
+  expect(screen.getByText('Card 1 of 2')).toBeInTheDocument();
+  expect(screen.getByText('Weak card')).toBeInTheDocument();
 });
 
 test('a failed update toasts and stays on the same card', async () => {
@@ -80,9 +142,9 @@ test('a failed update toasts and stays on the same card', async () => {
   );
   renderApp('/decks/deck-1/study');
   await user.click(await screen.findByRole('button', { name: 'Start studying' }));
-  await user.click(screen.getByRole('button', { name: 'Reveal answer' }));
+  await user.click(screen.getByRole('button', { name: 'Flip card' }));
   await user.click(screen.getByRole('button', { name: 'Got it' }));
 
-  expect(await screen.findByRole('status')).toHaveTextContent('Internal Server Error');
+  expect(await screen.findByRole('alert')).toHaveTextContent('Internal Server Error');
   expect(screen.getByText('Card 1 of 1')).toBeInTheDocument();
 });

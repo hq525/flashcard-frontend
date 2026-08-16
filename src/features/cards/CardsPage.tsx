@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useCards, useCategory, useDeck, useDeleteCard, useTags } from '../../api/hooks';
 import type { Card } from '../../api/types';
 import { Breadcrumbs } from '../../components/Breadcrumbs';
 import type { Crumb } from '../../components/Breadcrumbs';
-import { Button } from '../../components/Button';
+import { Button, buttonClassName } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { EmptyState } from '../../components/EmptyState';
 import { ErrorBanner, errorMessage } from '../../components/ErrorBanner';
@@ -25,7 +25,11 @@ export function CardsPage() {
 
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Card | null>(null);
-  const [filterTagIds, setFilterTagIds] = useState<string[]>([]);
+  // Filter lives in the URL so it survives back-navigation and can be shared.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filterTagIds = searchParams.get('tags')?.split(',').filter(Boolean) ?? [];
+  const setFilterTagIds = (ids: string[]) =>
+    setSearchParams(ids.length > 0 ? { tags: ids.join(',') } : {}, { replace: true });
 
   if (deck.isPending || cards.isPending) return <PageLoading />;
   if (deck.isError) return <ErrorBanner error={deck.error} onRetry={() => deck.refetch()} />;
@@ -38,8 +42,10 @@ export function CardsPage() {
   const filterTags = (tags.data ?? []).filter((tag) => usedTagIds.has(tag.id));
 
   const toggleFilterTag = (id: string) =>
-    setFilterTagIds((prev) =>
-      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
+    setFilterTagIds(
+      filterTagIds.includes(id)
+        ? filterTagIds.filter((t) => t !== id)
+        : [...filterTagIds, id],
     );
 
   const visibleCards = cards.data.filter((card) =>
@@ -55,13 +61,10 @@ export function CardsPage() {
   return (
     <div>
       <Breadcrumbs items={crumbs} />
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center gap-y-2 justify-between">
         <h1 className="text-xl font-bold">{deck.data.name}</h1>
         <div className="flex gap-2">
-          <Link
-            to={`/decks/${deckId}/study`}
-            className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
-          >
+          <Link to={`/decks/${deckId}/study`} className={buttonClassName('primary')}>
             Study
           </Link>
           <Button variant="secondary" onClick={() => setCreating(true)}>
@@ -82,7 +85,7 @@ export function CardsPage() {
                 aria-label={`Filter by ${tag.name}`}
                 aria-pressed={active}
                 onClick={() => toggleFilterTag(tag.id)}
-                className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                className={`min-h-8 touch-manipulation rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none ${
                   active
                     ? 'bg-indigo-600 text-white'
                     : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'

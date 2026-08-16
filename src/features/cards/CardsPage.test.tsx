@@ -325,6 +325,53 @@ test('submit shows per-image upload progress on the Create button', async () => 
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 });
 
+test('dismissing a dirty new-card dialog asks for confirmation', async () => {
+  const user = userEvent.setup();
+  useDeckPageHandlers();
+  const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  renderApp('/decks/deck-1');
+  await user.click(await screen.findByRole('button', { name: 'New card' }));
+  await user.type(screen.getByLabelText('Question'), 'Half-typed');
+  await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  // Declined the confirm: dialog stays open with the draft intact.
+  expect(confirmSpy).toHaveBeenCalled();
+  expect(screen.getByRole('dialog', { name: 'New card' })).toBeInTheDocument();
+
+  confirmSpy.mockReturnValue(true);
+  await user.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  confirmSpy.mockRestore();
+});
+
+test('dismissing a pristine new-card dialog closes without confirmation', async () => {
+  const user = userEvent.setup();
+  useDeckPageHandlers();
+  const confirmSpy = vi.spyOn(window, 'confirm');
+  renderApp('/decks/deck-1');
+  await user.click(await screen.findByRole('button', { name: 'New card' }));
+  await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+  expect(confirmSpy).not.toHaveBeenCalled();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  confirmSpy.mockRestore();
+});
+
+test('pasting an image into the dialog adds it as a pending image', async () => {
+  URL.createObjectURL = vi.fn(() => 'blob:preview');
+  URL.revokeObjectURL = vi.fn();
+  useDeckPageHandlers();
+  renderApp('/decks/deck-1');
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'New card' }));
+
+  fireEvent.paste(screen.getByLabelText('Question'), {
+    clipboardData: { files: [new File(['a'], 'image.png', { type: 'image/png' })] },
+  });
+
+  expect(await screen.findByAltText('Selected image 1')).toBeInTheDocument();
+});
+
 test('deletes a card after a cascade-warning confirm', async () => {
   const user = userEvent.setup();
   const cards = useDeckPageHandlers([makeCard()]);

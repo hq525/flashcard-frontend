@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../test/server';
@@ -58,6 +58,79 @@ test('uploads a question image: presign, S3 PUT, record POST with next sequence 
   expect(presignParams!.has('imageType')).toBe(false);
   expect(s3ContentType).toBe('image/png');
   expect(await screen.findByAltText('Question images 2')).toBeInTheDocument();
+});
+
+test('dropping two files uploads both with consecutive sequence numbers', async () => {
+  const images = useEditorHandlers([makeQuestionImage()]);
+  const postBodies: unknown[] = [];
+  server.use(
+    http.get('http://localhost:8080/presigned-url', ({ request: req }) => {
+      const fileName = new URL(req.url).searchParams.get('fileName');
+      return HttpResponse.json({
+        presignedUrl: 'http://localhost:8080/s3-upload',
+        imageUrl: `https://cdn/${fileName}`,
+      });
+    }),
+    http.put('http://localhost:8080/s3-upload', () => new HttpResponse(null, { status: 200 })),
+    http.post('http://localhost:8080/card-question-image', async ({ request: req }) => {
+      const body = (await req.json()) as { sequenceNumber: number; imageURL: string };
+      postBodies.push(body);
+      const created = makeQuestionImage({
+        id: `qimg-${body.sequenceNumber}`,
+        sequenceNumber: body.sequenceNumber,
+        imageURL: body.imageURL,
+      });
+      images.push(created);
+      return HttpResponse.json(created, { status: 201 });
+    }),
+  );
+  renderApp('/cards/card-1');
+  const dropzone = await screen.findByLabelText('Question images: drop images or click to browse');
+  fireEvent.drop(dropzone, {
+    dataTransfer: {
+      files: [
+        new File(['a'], 'a.png', { type: 'image/png' }),
+        new File(['b'], 'b.png', { type: 'image/png' }),
+      ],
+    },
+  });
+
+  await waitFor(() =>
+    expect(postBodies).toEqual([
+      { cardID: 'card-1', sequenceNumber: 2, imageURL: 'https://cdn/a.png' },
+      { cardID: 'card-1', sequenceNumber: 3, imageURL: 'https://cdn/b.png' },
+    ]),
+  );
+});
+
+test('pasting an image on a focused dropzone uploads it to that strip', async () => {
+  const images = useEditorHandlers([makeQuestionImage()]);
+  let postBody: unknown = null;
+  server.use(
+    http.get('http://localhost:8080/presigned-url', () =>
+      HttpResponse.json({
+        presignedUrl: 'http://localhost:8080/s3-upload',
+        imageUrl: 'https://cdn/pasted.png',
+      }),
+    ),
+    http.put('http://localhost:8080/s3-upload', () => new HttpResponse(null, { status: 200 })),
+    http.post('http://localhost:8080/card-question-image', async ({ request: req }) => {
+      postBody = await req.json();
+      const created = makeQuestionImage({ id: 'qimg-2', sequenceNumber: 2, imageURL: 'https://cdn/pasted.png' });
+      images.push(created);
+      return HttpResponse.json(created, { status: 201 });
+    }),
+  );
+  renderApp('/cards/card-1');
+  const dropzone = await screen.findByLabelText('Question images: drop images or click to browse');
+  dropzone.focus();
+  fireEvent.paste(dropzone, {
+    clipboardData: { files: [new File(['p'], 'pasted.png', { type: 'image/png' })] },
+  });
+
+  await waitFor(() =>
+    expect(postBody).toEqual({ cardID: 'card-1', sequenceNumber: 2, imageURL: 'https://cdn/pasted.png' }),
+  );
 });
 
 test('reordering swaps the sequence numbers of adjacent images', async () => {

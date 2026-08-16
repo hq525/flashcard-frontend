@@ -12,6 +12,7 @@ import type { CardAnswerSection } from '../../api/types';
 import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { errorMessage } from '../../components/ErrorBanner';
+import { ArrowDownIcon, ArrowUpIcon } from '../../components/icons';
 import { useToast } from '../../components/Toast';
 import { ImageStrip, nextSequenceNumber } from './ImageStrip';
 import type { StripImage } from './ImageStrip';
@@ -64,14 +65,19 @@ export function AnswerSectionEditor({
       },
     );
 
-  const uploadSectionImage = async (file: File) => {
+  // Sequence numbers are assigned locally so a multi-file batch doesn't race
+  // the query cache between uploads.
+  const uploadSectionImages = async (files: File[]) => {
     try {
-      const imageUrl = await uploadImageFile(file, 'answer');
-      await createImage.mutateAsync({
-        cardAnswerSectionID: section.id,
-        sequenceNumber: nextSequenceNumber(images.data ?? []),
-        imageURL: imageUrl,
-      });
+      let sequenceNumber = nextSequenceNumber(images.data ?? []);
+      for (const file of files) {
+        const imageUrl = await uploadImageFile(file, 'answer');
+        await createImage.mutateAsync({
+          cardAnswerSectionID: section.id,
+          sequenceNumber: sequenceNumber++,
+          imageURL: imageUrl,
+        });
+      }
     } catch (err) {
       showToast(errorMessage(err));
     }
@@ -96,7 +102,7 @@ export function AnswerSectionEditor({
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-5">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center gap-y-2 justify-between">
         <h3 className="font-semibold">Section {index + 1}</h3>
         <div className="flex gap-1">
           <Button
@@ -104,16 +110,18 @@ export function AnswerSectionEditor({
             aria-label={`Move section ${index + 1} up`}
             disabled={isFirst}
             onClick={onMoveUp}
+            className="flex min-w-11 items-center justify-center"
           >
-            ↑
+            <ArrowUpIcon />
           </Button>
           <Button
             variant="ghost"
             aria-label={`Move section ${index + 1} down`}
             disabled={isLast}
             onClick={onMoveDown}
+            className="flex min-w-11 items-center justify-center"
           >
-            ↓
+            <ArrowDownIcon />
           </Button>
           <Button variant="ghost" onClick={() => setConfirmingDelete(true)}>
             Delete section
@@ -127,7 +135,7 @@ export function AnswerSectionEditor({
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+            className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 focus:outline-none sm:text-sm"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
@@ -136,7 +144,7 @@ export function AnswerSectionEditor({
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
             rows={4}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+            className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 focus:outline-none sm:text-sm"
           />
         </label>
         <div className="flex justify-end">
@@ -150,7 +158,7 @@ export function AnswerSectionEditor({
         <ImageStrip
           title={`Section ${index + 1} images`}
           images={images.data ?? []}
-          onUpload={uploadSectionImage}
+          onUpload={uploadSectionImages}
           onDelete={(image) =>
             deleteImage.mutate(image.id, { onError: (err) => showToast(errorMessage(err)) })
           }

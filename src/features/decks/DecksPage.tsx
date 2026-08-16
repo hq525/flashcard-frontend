@@ -9,7 +9,7 @@ import {
 } from '../../api/hooks';
 import type { Deck } from '../../api/types';
 import { Breadcrumbs } from '../../components/Breadcrumbs';
-import { Button } from '../../components/Button';
+import { Button, buttonClassName } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { EmptyState } from '../../components/EmptyState';
 import { EntityFormDialog } from '../../components/EntityFormDialog';
@@ -39,7 +39,7 @@ export function DecksPage() {
   return (
     <div>
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: category.data.name }]} />
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center gap-y-2 justify-between">
         <h1 className="text-xl font-bold">{category.data.name}</h1>
         <Button onClick={() => setCreating(true)}>New deck</Button>
       </div>
@@ -55,10 +55,7 @@ export function DecksPage() {
               </Link>
               {deck.description && <p className="mt-1 text-sm text-gray-500">{deck.description}</p>}
               <div className="mt-3 flex items-center gap-2">
-                <Link
-                  to={`/decks/${deck.id}/study`}
-                  className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
-                >
+                <Link to={`/decks/${deck.id}/study`} className={buttonClassName('primary')}>
                   Study
                 </Link>
                 <Button variant="ghost" onClick={() => setEditing(deck)}>

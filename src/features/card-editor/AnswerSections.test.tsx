@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../test/server';
@@ -154,4 +154,35 @@ test('uploads a section image with imageType=answer', async () => {
     }),
   );
   expect(presignParams!.get('imageType')).toBe('answer');
+});
+
+test('dropping a file on a section dropzone uploads it', async () => {
+  useEditorHandlers([makeSection()], []);
+  let postBody: unknown = null;
+  server.use(
+    http.get('http://localhost:8080/presigned-url', () =>
+      HttpResponse.json({
+        presignedUrl: 'http://localhost:8080/s3-upload',
+        imageUrl: 'https://cdn/ans.png',
+      }),
+    ),
+    http.put('http://localhost:8080/s3-upload', () => new HttpResponse(null, { status: 200 })),
+    http.post('http://localhost:8080/card-answer-section-image', async ({ request: req }) => {
+      postBody = await req.json();
+      return HttpResponse.json(makeSectionImage({ imageURL: 'https://cdn/ans.png' }), { status: 201 });
+    }),
+  );
+  renderApp('/cards/card-1');
+  const dropzone = await screen.findByLabelText('Section 1 images: drop images or click to browse');
+  fireEvent.drop(dropzone, {
+    dataTransfer: { files: [new File(['b'], 'ans.png', { type: 'image/png' })] },
+  });
+
+  await waitFor(() =>
+    expect(postBody).toEqual({
+      cardAnswerSectionID: 'sec-1',
+      sequenceNumber: 1,
+      imageURL: 'https://cdn/ans.png',
+    }),
+  );
 });

@@ -32,12 +32,45 @@ test('ConfirmDialog fires onConfirm and onCancel', async () => {
   expect(onCancel).toHaveBeenCalledOnce();
 });
 
+test('Dialog closes on Escape and marks itself modal', async () => {
+  const user = userEvent.setup();
+  const onCancel = vi.fn();
+  render(
+    <ConfirmDialog open title="Delete?" message="Sure?" onConfirm={vi.fn()} onCancel={onCancel} />,
+  );
+  expect(screen.getByRole('dialog', { name: 'Delete?' })).toHaveAttribute('aria-modal', 'true');
+  await user.keyboard('{Escape}');
+  expect(onCancel).toHaveBeenCalledOnce();
+});
+
+test('error toasts use role=alert, success toasts role=status', async () => {
+  const user = userEvent.setup();
+  function Trigger() {
+    const { showToast } = useToast();
+    return (
+      <>
+        <button onClick={() => showToast('Save failed')}>Fail</button>
+        <button onClick={() => showToast('Saved', 'success')}>Succeed</button>
+      </>
+    );
+  }
+  render(
+    <ToastProvider>
+      <Trigger />
+    </ToastProvider>,
+  );
+  await user.click(screen.getByRole('button', { name: 'Fail' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('Save failed');
+  await user.click(screen.getByRole('button', { name: 'Succeed' }));
+  expect(screen.getByRole('status')).toHaveTextContent('Saved');
+});
+
 function ToastTrigger() {
   const { showToast } = useToast();
   return <button onClick={() => showToast('Save failed')}>Trigger</button>;
 }
 
-test('showToast displays a toast', async () => {
+test('showToast displays an error toast as an alert', async () => {
   const user = userEvent.setup();
   render(
     <ToastProvider>
@@ -45,7 +78,7 @@ test('showToast displays a toast', async () => {
     </ToastProvider>,
   );
   await user.click(screen.getByRole('button', { name: 'Trigger' }));
-  expect(screen.getByRole('status')).toHaveTextContent('Save failed');
+  expect(screen.getByRole('alert')).toHaveTextContent('Save failed');
 });
 
 test('EntityFormDialog disables Save until name is filled and submits trimmed values', async () => {

@@ -26,7 +26,7 @@ export function TagsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center gap-y-2 justify-between">
         <h1 className="text-xl font-bold">Tags</h1>
         <Button onClick={() => setCreating(true)}>New tag</Button>
       </div>

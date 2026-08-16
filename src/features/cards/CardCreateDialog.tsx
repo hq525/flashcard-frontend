@@ -5,6 +5,7 @@ import type { Card } from '../../api/types';
 import { Button } from '../../components/Button';
 import { Dialog } from '../../components/Dialog';
 import { errorMessage } from '../../components/ErrorBanner';
+import { ChevronDownIcon, PlusIcon, XIcon } from '../../components/icons';
 import { TagChip } from '../../components/TagChip';
 import { useToast } from '../../components/Toast';
 
@@ -113,8 +114,17 @@ export function CardCreateDialog({ deckId, open, onClose, onCreated }: CardCreat
 
   const busy = createCard.isPending || uploading;
 
+  // Backdrop click / Escape / Cancel all route through here: don't silently
+  // discard a draft the user has started.
+  const dirty = question.trim() !== '' || selectedTagIds.length > 0 || images.length > 0;
+  const requestClose = () => {
+    if (busy) return;
+    if (dirty && !window.confirm('Discard this card?')) return;
+    onClose();
+  };
+
   return (
-    <Dialog open={open} onClose={onClose} title="New card">
+    <Dialog open={open} onClose={requestClose} title="New card">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -131,14 +141,23 @@ export function CardCreateDialog({ deckId, open, onClose, onCreated }: CardCreat
         // browser to it, losing the form state.
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => e.preventDefault()}
+        // Pasting a copied image (screenshot, right-click-copy) anywhere in
+        // the dialog adds it; text pastes fall through untouched.
+        onPaste={(e) => {
+          if (e.clipboardData.files.length === 0) return;
+          e.preventDefault();
+          addFiles(e.clipboardData.files);
+        }}
       >
         <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-          Question
+          <span className="after:ml-0.5 after:text-red-500 after:content-['*']">Question</span>
           <textarea
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             rows={4}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+            required
+            aria-required="true"
+            className="rounded-md border border-gray-300 px-3 py-2 text-base focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 focus:outline-none sm:text-sm"
           />
         </label>
         <fieldset>
@@ -150,7 +169,7 @@ export function CardCreateDialog({ deckId, open, onClose, onCreated }: CardCreat
               aria-expanded={tagsOpen}
               disabled={busy}
               onClick={() => setTagsOpen((o) => !o)}
-              className="flex w-full flex-wrap items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-left text-sm focus:border-indigo-500 focus:outline-none disabled:cursor-not-allowed"
+              className="flex min-h-11 w-full flex-wrap items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-left text-sm focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none disabled:cursor-not-allowed"
             >
               {selectedTagIds.length > 0 ? (
                 (tags.data ?? [])
@@ -159,7 +178,7 @@ export function CardCreateDialog({ deckId, open, onClose, onCreated }: CardCreat
               ) : (
                 <span className="text-gray-500">Select tags</span>
               )}
-              <span className="ml-auto text-gray-400" aria-hidden="true">▾</span>
+              <ChevronDownIcon className="ml-auto h-4 w-4 text-gray-400" />
             </button>
             {tagsOpen && (
               <>
@@ -170,7 +189,7 @@ export function CardCreateDialog({ deckId, open, onClose, onCreated }: CardCreat
                       {tags.data.map((tag) => (
                         <label
                           key={tag.id}
-                          className="flex items-center gap-1.5 rounded px-1.5 py-1 text-sm hover:bg-gray-50"
+                          className="flex items-center gap-1.5 rounded px-1.5 py-2 text-sm hover:bg-gray-50"
                         >
                           <input
                             type="checkbox"
@@ -198,7 +217,7 @@ export function CardCreateDialog({ deckId, open, onClose, onCreated }: CardCreat
                   src={img.previewUrl}
                   alt={`Selected image ${i + 1}`}
                   className={`h-20 w-20 rounded-md border border-gray-200 object-cover ${
-                    uploading && i === uploadingIndex ? 'animate-pulse' : ''
+                    uploading && i === uploadingIndex ? 'animate-pulse motion-reduce:animate-none' : ''
                   } ${uploading && i > uploadingIndex ? 'opacity-40' : ''}`}
                 />
                 <Button
@@ -206,8 +225,9 @@ export function CardCreateDialog({ deckId, open, onClose, onCreated }: CardCreat
                   aria-label={`Remove image ${i + 1}`}
                   disabled={busy}
                   onClick={() => removeImage(i)}
+                  className="flex min-w-11 items-center justify-center"
                 >
-                  ✕
+                  <XIcon />
                 </Button>
               </li>
             ))}
@@ -233,7 +253,7 @@ export function CardCreateDialog({ deckId, open, onClose, onCreated }: CardCreat
               >
                 {/* pointer-events-none keeps children from firing dragleave
                     on the box while a file is dragged across them */}
-                <span className="pointer-events-none text-lg leading-none" aria-hidden="true">+</span>
+                <PlusIcon className="pointer-events-none h-5 w-5" />
                 <span className="pointer-events-none">Add image</span>
               </button>
             </li>
@@ -252,7 +272,7 @@ export function CardCreateDialog({ deckId, open, onClose, onCreated }: CardCreat
           />
         </div>
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose} disabled={busy}>
+          <Button variant="secondary" onClick={requestClose} disabled={busy}>
             Cancel
           </Button>
           <Button type="submit" disabled={!question.trim() || busy}>
