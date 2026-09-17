@@ -1,5 +1,6 @@
 import type {
   Card,
+  CardSchedule,
   CardAnswerSection,
   CardAnswerSectionImage,
   CardQuestionImage,
@@ -34,6 +35,7 @@ export function makeCard(overrides: Partial<Card> = {}): Card {
     lastAccessedDateTime: '',
     memorized: false,
     leitnerBox: 1,
+    reviewRevision: 0,
     ...overrides,
   };
 }
@@ -72,6 +74,15 @@ export function makeSectionImage(overrides: Partial<CardAnswerSectionImage> = {}
     sequenceNumber: 1,
     createdDateTime: TS,
     imageURL: 'https://bucket.s3.amazonaws.com/answer-images/simg-1.png',
+    ...overrides,
+  };
+}
+
+export function makeSchedule(overrides: Partial<CardSchedule> = {}): CardSchedule {
+  return {
+    version: 1, algorithm: 'fsrs-6', dueAt: '2026-09-18T12:00:00Z',
+    stability: 2, difficulty: 5, scheduledDays: 1, reps: 1, lapses: 0,
+    state: 'review', lastReviewAt: '2026-09-17T12:00:00Z', remainingSteps: 0,
     ...overrides,
   };
 }

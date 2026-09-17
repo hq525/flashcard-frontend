@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   cardsApi,
+  cardReviewsApi,
   categoriesApi,
   decksApi,
   questionImagesApi,
@@ -9,6 +10,8 @@ import {
   tagsApi,
 } from './resources';
 import type {
+  Card,
+  ReviewCardRequest,
   UpdateCardAnswerSectionImageRequest,
   UpdateCardAnswerSectionRequest,
   UpdateCardQuestionImageRequest,
@@ -26,6 +29,7 @@ export const queryKeys = {
   tags: ['tags'] as const,
   cards: (deckId: string) => ['cards', deckId] as const,
   card: (id: string) => ['card', id] as const,
+  reviewOptions: (id: string, revision: number) => ['review-options', id, revision] as const,
   answerSections: (cardId: string) => ['answer-sections', cardId] as const,
   questionImages: (cardId: string) => ['question-images', cardId] as const,
   sectionImages: (sectionId: string) => ['section-images', sectionId] as const,
@@ -173,18 +177,36 @@ export function useDeleteTag() {
 
 // --- Cards ---
 
+// GSI reads can lag a successful review. Preserve the newest scheduling
+// revision while still accepting card content returned by subsequent reads.
+function preserveReview(incoming: Card, cached: Card | undefined): Card {
+  if (!cached || (cached.reviewRevision ?? 0) <= (incoming.reviewRevision ?? 0)) return incoming;
+  return { ...incoming, schedule: cached.schedule, reviewRevision: cached.reviewRevision,
+    lastAccessedDateTime: cached.lastAccessedDateTime, memorized: cached.memorized };
+}
+
 export function useCards(deckId: string) {
+  const qc = useQueryClient();
   return useQuery({
     queryKey: queryKeys.cards(deckId),
-    queryFn: () => cardsApi.list(deckId),
+    queryFn: async () => {
+      const incoming = await cardsApi.list(deckId);
+      const cached = new Map((qc.getQueryData<Card[]>(queryKeys.cards(deckId)) ?? []).map(card => [card.id, card]));
+      return incoming.map(card => preserveReview(preserveReview(card, cached.get(card.id)),
+        qc.getQueryData<Card>(queryKeys.card(card.id))));
+    },
     select: byCreatedDateTime,
   });
 }
 
 export function useCard(id: string | undefined) {
+  const qc = useQueryClient();
   return useQuery({
     queryKey: queryKeys.card(id ?? ''),
-    queryFn: () => cardsApi.get(id!),
+    queryFn: async () => {
+      const incoming = await cardsApi.get(id!);
+      return preserveReview(incoming, qc.getQueryData<Card>(queryKeys.card(incoming.id)));
+    },
     enabled: !!id,
   });
 }
@@ -205,6 +227,50 @@ export function useUpdateCard() {
     onSuccess: (updated) => {
       qc.setQueryData(queryKeys.card(updated.id), updated);
       return qc.invalidateQueries({ queryKey: queryKeys.cards(updated.deckID) });
+    },
+  });
+}
+
+// Review responses are authoritative. Updating both caches avoids a stale GSI
+// list response replacing the just-saved schedule.
+async function cacheReviewedCard(qc: ReturnType<typeof useQueryClient>, card: Card) {
+  await Promise.all([
+    qc.cancelQueries({ queryKey: queryKeys.card(card.id) }),
+    qc.cancelQueries({ queryKey: queryKeys.cards(card.deckID) }),
+  ]);
+  card = preserveReview(card, qc.getQueryData<Card>(queryKeys.card(card.id)));
+  qc.setQueryData(queryKeys.card(card.id), card);
+  qc.setQueryData<Card[]>(queryKeys.cards(card.deckID), (cards) =>
+    cards?.map((existing) => existing.id === card.id ? card : existing));
+}
+
+export function useReviewOptions(card: Card | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.reviewOptions(card?.id ?? '', card?.reviewRevision ?? 0),
+    queryFn: () => cardReviewsApi.options(card!.id),
+    enabled: !!card && enabled,
+    retry: false,
+  });
+}
+
+export function useReviewCard() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: ReviewCardRequest }) => cardReviewsApi.review(id, body),
+    onSuccess: async ({ card }) => {
+      await cacheReviewedCard(qc, card);
+      qc.removeQueries({ queryKey: ['review-options', card.id], type: 'inactive' });
+    },
+  });
+}
+
+export function useRefreshReviewCard() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: cardsApi.get,
+    onSuccess: async (card) => {
+      await cacheReviewedCard(qc, card);
+      return qc.invalidateQueries({ queryKey: ['review-options', card.id] });
     },
   });
 }

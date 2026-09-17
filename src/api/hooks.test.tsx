@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import type { ReactNode } from 'react';
 import { server } from '../test/server';
-import { makeCard, makeCategory, makeDeck, makeTag } from '../test/fixtures';
+import { makeCard, makeCategory, makeDeck, makeTag, makeSchedule } from '../test/fixtures';
 import {
   useCards,
+  useCard,
+  useReviewCard,
   useCategories,
   useCreateCategory,
   useDecks,
@@ -124,4 +126,34 @@ test('useDeleteCard invalidates the card list using the deleted entity deckID', 
   await del.result.current.mutateAsync('card-1');
 
   await waitFor(() => expect(listCalls).toBe(2));
+});
+
+
+test('saved review state survives older deck and card refetches while newer content is retained', async () => {
+  const before = makeCard();
+  const after = makeCard({ reviewRevision: 1, schedule: makeSchedule() });
+  server.use(
+    http.get('http://localhost:8080/cards', () => HttpResponse.json([{ ...before, question: 'Edited on another device' }])),
+    http.get('http://localhost:8080/card', () => HttpResponse.json(before)),
+    http.post('http://localhost:8080/card-review', () => HttpResponse.json({ card: after, review: {
+      id: 'review-1', entityType: 'card_review', cardId: before.id, requestId: 'review-1', rating: 'good',
+      reviewedAt: after.schedule!.lastReviewAt, previousSchedule: makeSchedule(), schedule: after.schedule, revision: 1,
+    } })),
+  );
+  const wrapper = createWrapper();
+  const list = renderHook(() => useCards('deck-1'), { wrapper });
+  const card = renderHook(() => useCard('card-1'), { wrapper });
+  const save = renderHook(() => useReviewCard(), { wrapper });
+  await waitFor(() => expect(list.result.current.data?.[0].reviewRevision).toBe(0));
+  await waitFor(() => expect(card.result.current.data?.reviewRevision).toBe(0));
+  await act(async () => { await save.result.current.mutateAsync({ id: 'card-1', body: { rating: 'good', expectedRevision: 0, reviewId: 'review-1' } }); });
+  await waitFor(() => expect(list.result.current.data![0].reviewRevision).toBe(1));
+  await waitFor(() => expect(card.result.current.data!.reviewRevision).toBe(1));
+  await act(async () => { await list.result.current.refetch(); await card.result.current.refetch(); });
+  await waitFor(() => expect(list.result.current.data![0].question).toBe('Edited on another device'));
+  expect(list.result.current.data![0].schedule).toEqual(after.schedule);
+  expect(list.result.current.data![0].reviewRevision).toBe(1);
+  expect(list.result.current.data![0].question).toBe('Edited on another device');
+  expect(card.result.current.data!.schedule).toEqual(after.schedule);
+  expect(card.result.current.data!.reviewRevision).toBe(1);
 });

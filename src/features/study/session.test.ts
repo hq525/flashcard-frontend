@@ -1,5 +1,5 @@
-import { makeCard } from '../../test/fixtures';
-import { buildSession, isDue, nextBox } from './session';
+import { makeCard, makeSchedule } from '../../test/fixtures';
+import { buildSession, isDue } from './session';
 
 const now = new Date('2026-08-16T12:00:00Z');
 const daysAgo = (days: number) =>
@@ -29,15 +29,7 @@ test('legacy cards without a box behave as box 1', () => {
   expect(isDue(noField, now)).toBe(true);
 });
 
-test('nextBox promotes on success (capped at 5) and demotes to 1 on failure', () => {
-  expect(nextBox(1, true)).toBe(2);
-  expect(nextBox(4, true)).toBe(5);
-  expect(nextBox(5, true)).toBe(5);
-  expect(nextBox(4, false)).toBe(1);
-  expect(nextBox(0, true)).toBe(2); // legacy 0 = box 1
-});
-
-test('due mode selects due cards, weakest box first then least recently seen', () => {
+test('due mode selects oldest due cards first using preserved legacy due dates', () => {
   const cards = [
     makeCard({ id: 'strong-due', leitnerBox: 4, lastAccessedDateTime: daysAgo(9) }),
     makeCard({ id: 'not-due', leitnerBox: 3, lastAccessedDateTime: daysAgo(1) }),
@@ -46,7 +38,7 @@ test('due mode selects due cards, weakest box first then least recently seen', (
     makeCard({ id: 'never-seen', leitnerBox: 1, lastAccessedDateTime: '' }),
   ];
   const session = buildSession(cards, { mode: 'due', shuffle: false }, now);
-  expect(session.map((c) => c.id)).toEqual(['never-seen', 'weak-old', 'weak-recent', 'strong-due']);
+  expect(session.map((c) => c.id)).toEqual(['never-seen', 'weak-old', 'strong-due', 'weak-recent']);
 });
 
 test('all mode keeps every card in order; unmemorized mode filters', () => {
@@ -72,4 +64,36 @@ test('shuffle permutes deterministically with an injected random and does not mu
   // random()=0: Fisher-Yates swaps (i=2,j=0) then (i=1,j=0): [a,b,c] -> [c,b,a] -> [b,c,a]
   expect(session.map((c) => c.id)).toEqual(['b', 'c', 'a']);
   expect(cards.map((c) => c.id)).toEqual(before);
+});
+
+test('persisted FSRS due time overrides legacy boxes and last access', () => {
+  const card = makeCard({ lastAccessedDateTime: '', schedule: makeSchedule({ dueAt: '2026-08-16T12:10:00Z' }) });
+  expect(isDue(card, now)).toBe(false);
+  expect(isDue(card, new Date('2026-08-16T12:10:00Z'))).toBe(true);
+});
+
+test('invalid legacy or persisted dates are due immediately', () => {
+  expect(isDue(makeCard({ lastAccessedDateTime: 'invalid' }), now)).toBe(true);
+  expect(isDue(makeCard({ schedule: makeSchedule({ dueAt: 'invalid' }) }), now)).toBe(true);
+});
+
+test('due mode resumes persisted learning cards only once their due time arrives', () => {
+  const card = makeCard({ schedule: makeSchedule({ state: 'learning', dueAt: '2026-08-16T12:10:00Z' }) });
+  expect(buildSession([card], { mode: 'due', shuffle: false }, now)).toEqual([]);
+  expect(buildSession([card], { mode: 'due', shuffle: false }, new Date('2026-08-16T12:10:00Z'))).toEqual([card]);
+});
+
+
+test('future or zero legacy dates are due immediately', () => {
+  expect(isDue(makeCard({ lastAccessedDateTime: '2027-01-01T00:00:00Z', leitnerBox: 5 }), now)).toBe(true);
+  expect(isDue(makeCard({ lastAccessedDateTime: '0001-01-01T00:00:00Z' }), now)).toBe(true);
+});
+
+
+test('FSRS due ordering ignores stale Leitner boxes', () => {
+  const cards = [
+    makeCard({ id: 'later', leitnerBox: 1, schedule: makeSchedule({ dueAt: '2026-08-16T11:00:00Z' }) }),
+    makeCard({ id: 'earlier', leitnerBox: 5, schedule: makeSchedule({ dueAt: '2026-08-15T12:00:00Z' }) }),
+  ];
+  expect(buildSession(cards, { mode: 'due', shuffle: false }, now).map(card => card.id)).toEqual(['earlier', 'later']);
 });

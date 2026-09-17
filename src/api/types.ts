@@ -32,6 +32,62 @@ export interface Card {
   memorized: boolean;
   // Leitner spaced-repetition box, 1-5; 0 on legacy records means box 1.
   leitnerBox: number;
+  schedule?: CardSchedule;
+  reviewRevision: number;
+}
+
+export type ReviewRating = 'again' | 'hard' | 'good' | 'easy';
+export type ScheduleState = 'new' | 'learning' | 'review' | 'relearning';
+
+export interface CardSchedule {
+  version: number;
+  algorithm: string;
+  dueAt: string;
+  stability: number;
+  difficulty: number;
+  scheduledDays: number;
+  reps: number;
+  lapses: number;
+  state: ScheduleState;
+  lastReviewAt: string;
+  remainingSteps: number;
+}
+
+export interface CardReview {
+  id: string;
+  entityType: string;
+  cardId: string;
+  requestId: string;
+  rating: ReviewRating;
+  reviewedAt: string;
+  previousSchedule: CardSchedule;
+  schedule: CardSchedule;
+  revision: number;
+}
+
+export interface ReviewOption {
+  rating: ReviewRating;
+  dueAt: string;
+  intervalSeconds: number;
+  state: ScheduleState;
+}
+
+export interface ReviewOptions {
+  cardId: string;
+  revision: number;
+  generatedAt: string;
+  options: ReviewOption[];
+}
+
+export interface ReviewCardRequest {
+  reviewId: string;
+  rating: ReviewRating;
+  expectedRevision: number;
+}
+
+export interface ReviewCardResponse {
+  card: Card;
+  review: CardReview;
 }
 
 export interface CardAnswerSection {

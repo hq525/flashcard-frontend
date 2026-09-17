@@ -16,14 +16,33 @@ const clampBox = (box: number | undefined) => Math.min(Math.max(box || 1, 1), 5)
 // Leitner schedule: box 1..5 reviewed every 1, 2, 4, 8, 16 days.
 const intervalMs = (box: number) => 2 ** (clampBox(box) - 1) * dayMs;
 
-export function isDue(card: Card, now: Date): boolean {
-  if (!card.lastAccessedDateTime) return true;
-  const lastReview = new Date(card.lastAccessedDateTime).getTime();
-  return now.getTime() - lastReview >= intervalMs(card.leitnerBox);
+function dueTime(card: Card, now: Date): number {
+  if (card.schedule) {
+    const due = Date.parse(card.schedule.dueAt);
+    return Number.isFinite(due) ? due : -Infinity;
+  }
+  const lastReview = Date.parse(card.lastAccessedDateTime);
+  if (!Number.isFinite(lastReview) || lastReview > now.getTime()) return -Infinity;
+  return lastReview + intervalMs(card.leitnerBox);
 }
 
-export function nextBox(box: number, gotIt: boolean): number {
-  return gotIt ? Math.min(clampBox(box) + 1, 5) : 1;
+export function isDue(card: Card, now: Date): boolean {
+  return dueTime(card, now) <= now.getTime();
+}
+
+// Only short server-assigned learning steps stay inside the current session.
+export function needsSessionRepeat(card: Card, reviewedAt: string): boolean {
+  const schedule = card.schedule;
+  return !!schedule && (schedule.state === 'learning' || schedule.state === 'relearning')
+    && Date.parse(schedule.dueAt) - Date.parse(reviewedAt) <= dayMs;
+}
+
+export function formatInterval(seconds: number): string {
+  if (seconds < 60) return `${Math.max(0, Math.ceil(seconds))} sec`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
+  if (seconds < 86400) return `${Math.round(seconds / 3600)} hr`;
+  const days = Math.round(seconds / 86400);
+  return `${days} ${days === 1 ? 'day' : 'days'}`;
 }
 
 export function buildSession(
@@ -35,17 +54,11 @@ export function buildSession(
   let session: Card[];
   switch (opts.mode) {
     case 'due':
-      // Weakest memories first, least recently reviewed within the same box
-      // (never-reviewed cards sort oldest).
+      // Persisted due times are authoritative; legacy cards use their original
+      // due dates until reviewed. Never-reviewed cards come first.
       session = cards
         .filter((c) => isDue(c, now))
-        .sort((a, b) => {
-          const boxDiff = clampBox(a.leitnerBox) - clampBox(b.leitnerBox);
-          if (boxDiff !== 0) return boxDiff;
-          const aTime = a.lastAccessedDateTime ? new Date(a.lastAccessedDateTime).getTime() : 0;
-          const bTime = b.lastAccessedDateTime ? new Date(b.lastAccessedDateTime).getTime() : 0;
-          return aTime - bTime;
-        });
+        .sort((a, b) => dueTime(a, now) - dueTime(b, now));
       break;
     case 'unmemorized':
       session = cards.filter((c) => !c.memorized);

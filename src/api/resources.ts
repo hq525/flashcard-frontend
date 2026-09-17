@@ -1,6 +1,10 @@
 import { request } from './client';
 import type {
   Card,
+  CardReview,
+  ReviewCardRequest,
+  ReviewCardResponse,
+  ReviewOptions,
   CardAnswerSection,
   CardAnswerSectionImage,
   CardQuestionImage,
@@ -57,6 +61,13 @@ export const cardsApi = {
   update: (id: string, body: UpdateCardRequest) =>
     request<Card>('PUT', '/card', { params: { id }, body }),
   remove: (id: string) => request<Card>('DELETE', '/card', { params: { id } }),
+};
+
+export const cardReviewsApi = {
+  options: (cardId: string) => request<ReviewOptions>('GET', '/card-review-options', { params: { cardId } }),
+  review: (cardId: string, body: ReviewCardRequest) =>
+    request<ReviewCardResponse>('POST', '/card-review', { params: { cardId }, body }),
+  list: (cardId: string) => request<CardReview[]>('GET', '/card-reviews', { params: { cardId } }),
 };
 
 export const sectionsApi = {
