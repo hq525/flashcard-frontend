@@ -1,6 +1,10 @@
 # Flashcard Frontend
 
-React SPA for the [Flashcard-Lambda](../Flashcard-Lambda) Go backend: browse categories, decks and cards, edit answers, images and tags, and study with spaced repetition. This deployment is a private library for one owner.
+React SPA for the [Flashcard-Lambda](https://github.com/hq525/Flashcard-Lambda) Go backend: browse categories, decks and cards, edit answers, images and tags, and study with spaced repetition. This deployment is a private library for one owner.
+
+## Reviewing the project
+
+The source, tests and architecture documentation are available for portfolio review. The deployed library requires its owner's login. `npm test` runs against synthetic fixtures without AWS credentials; use an isolated deployment and sample study content for demos or screenshots.
 
 ## Setup
 
@@ -47,14 +51,14 @@ npm audit
 
 ## Coordinated production cutover
 
-Do not publish this frontend separately from the authenticated backend. Existing public clients and legacy media need the backend maintenance/migration procedure first; see the [backend deployment documentation](../Flashcard-Lambda/README.md). Preserve existing IDs, content and history during that migration.
+Deploy this frontend together with a compatible authenticated backend. Existing public clients and legacy media need the backend maintenance/migration procedure first; see the [backend deployment documentation](https://github.com/hq525/Flashcard-Lambda/blob/main/docs/security-deployment-2026-09-20.md). Preserve existing IDs, content and history during that migration.
 
-The production Amplify app is `d21qooye31nta2`, branch `main`, at `https://main.d21qooye31nta2.amplifyapp.com`. **Pushing to its connected branch automatically deploys.** Prepare and review changes on an isolated branch until the maintenance cutover is ready.
+Choose the Amplify app and connected branch for your deployment. **Pushing to the connected branch can automatically deploy.** Prepare changes on an isolated branch and review a pull request before merging. The `https://flashcards.example.com` URLs below are documentation examples; replace them with your own frontend origin.
 
 1. Freeze legacy writes, back up data/media, and follow the backend dry-run-first image migration and authenticated API rollout.
-2. Provision the admin-created Cognito owner account, assign its `owner` group, disable public signup and use a public app client with authorization code flow and `openid email` scopes. Register exactly `https://main.d21qooye31nta2.amplifyapp.com/auth/callback` as the callback and `https://main.d21qooye31nta2.amplifyapp.com/` as the logout URL. For local development, separately register the chosen loopback origin and `/auth/callback`.
-3. Set all five environment variables in Amplify from the backend stack outputs. Production API: `https://nzbsoybije.execute-api.ap-southeast-1.amazonaws.com/prod`. Media origin: `https://flash-card-app-media-prod.s3.ap-southeast-1.amazonaws.com`. Hosted domain: `https://flashcards-725020099811-ap-southeast-1-prod.auth.ap-southeast-1.amazoncognito.com`. Remove obsolete browser-key environment variables.
-4. Keep `customHttp.yml` synchronized with these origins. Amplify applies its CSP, frame denial, MIME-sniffing protection, referrer policy, HTTPS and cache headers. Inline styles support the study card's measured height/rotation; scripts are restricted to this origin. No wildcard media source is allowed. Hashed `/assets/**` files use a one-year public immutable cache policy; the entry document and known application routes revalidate. Cache rules are disjoint so they do not depend on undocumented overlapping-header precedence. Add a matching revalidation rule when introducing another SPA route prefix.
+2. Provision the admin-created Cognito owner account, assign its `owner` group, disable public signup and use a public app client with authorization code flow and `openid email` scopes. Register `https://flashcards.example.com/auth/callback` as the callback and `https://flashcards.example.com/` as the logout URL, using your actual frontend origin in both. For local development, separately register the chosen loopback origin and `/auth/callback`.
+3. Set all five environment variables in Amplify from the backend stack outputs: `ApiUrl`, `AuthIssuer`, `AuthClientId`, `AuthDomain` and `MediaOrigin`. Copy `.env.example` only for isolated local development and replace every placeholder. Remove obsolete browser-key environment variables.
+4. Keep `customHttp.yml` synchronized with these origins. Its checked-in exact origins are public configuration for the existing deployment; a fork must replace them with its own origins before deploying. Amplify applies its CSP, frame denial, MIME-sniffing protection, referrer policy, HTTPS and cache headers. Inline styles support the study card's measured height/rotation; scripts are restricted to this origin. No wildcard media source is allowed. Hashed `/assets/**` files use a one-year public immutable cache policy; the entry document and known application routes revalidate. Cache rules are disjoint so they do not depend on undocumented overlapping-header precedence. Add a matching revalidation rule when introducing another SPA route prefix.
 5. Configure Amplify's SPA rewrite to `/index.html` (HTTP 200) for application routes including `/auth/callback`, excluding real static assets. `amplify.yml` installs the Node version pinned in `.nvmrc` and runs `npm ci` and `npm run build`.
 6. Release during the coordinated maintenance window. Verify anonymous API access fails, the owner can log in/read/edit/study/upload, an expired session locks without losing an unsaved draft, same-owner popup login restores that draft, logout discards it, direct unsigned media reads fail, signed image metadata refreshes without re-downloading already displayed images, and the deployed headers are present. Revoke legacy shared keys and invalidate old frontend bundles as part of the backend cutover.
 

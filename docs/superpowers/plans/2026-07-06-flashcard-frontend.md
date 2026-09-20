@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Working directory for every command: `/Users/zhaohanqing/Documents/GitHub/flashcard-frontend` (repo root; Node v22.13.0 installed).
+- Working directory for every command: the `flashcard-frontend` repository root (Node v22.13.0 installed).
 - Env vars: `VITE_API_BASE_URL` (backend base URL), `VITE_API_KEY` (optional; when non-empty every API request carries `X-Api-Key`). Read ONLY in `src/api/config.ts`.
 - Backend JSON field names are used verbatim and are case-sensitive: `categoryID`, `deckID`, `cardID`, `cardAnswerSectionID`, `tags` (array of tag ids, may be `null`), `memorized`, `sequenceNumber`, `imageURL`, `entityType`, `presignedUrl`, `imageUrl`.
 - List query params are exactly: `categoryId` (decks), `deckId` (cards), `cardId` (sections + question images), `cardAnswerSectionId` (section images). Item ops use `?id=`.
@@ -4609,7 +4609,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```markdown
 # Flashcard Frontend
 
-React SPA for the [Flashcard-Lambda](../Flashcard-Lambda) Go backend: browse
+React SPA for the [Flashcard-Lambda](https://github.com/hq525/Flashcard-Lambda) Go backend: browse
 categories → decks → cards, edit cards (multi-section answers, images, tags),
 and study decks (reveal answers, mark cards memorized).
 
