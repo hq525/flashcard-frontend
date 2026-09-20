@@ -95,8 +95,9 @@ export class AuthSession {
   };
 
   private async load() {
+    // Hosting can canonicalize the callback with a trailing slash.
+    const callback = /^\/auth\/callback\/?$/.test(window.location.pathname);
     try {
-      const callback = window.location.pathname === '/auth/callback';
       if (callback && new SigninResponse(new URLSearchParams(window.location.search)).url_state === 'reauth') {
         // Popup sessionStorage is copied before the PKCE state is written in
         // the opener. Notify it directly; the opener validates state + PKCE.
@@ -109,7 +110,7 @@ export class AuthSession {
       if (callback) window.history.replaceState({}, '', '/');
       await this.acceptUser(user);
     } catch {
-      if (window.location.pathname === '/auth/callback') window.history.replaceState({}, '', '/');
+      if (callback) window.history.replaceState({}, '', '/');
       await this.clear();
       throw new Error('Sign in failed. Please try again.');
     }

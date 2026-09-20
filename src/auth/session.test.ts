@@ -88,11 +88,33 @@ test('authorization requests contain a fresh S256 PKCE challenge and state', asy
   expect(first.searchParams.get('state')).not.toBe(second.searchParams.get('state'));
 });
 
-test('callback rejects unsolicited authorization state and strips the URL', async () => {
-  window.history.replaceState({}, '', '/auth/callback?code=forged&state=unsolicited&returnTo=https://evil.example');
+test.each(['/auth/callback', '/auth/callback/'])('%s rejects unsolicited authorization state and strips the URL', async (path) => {
+  window.history.replaceState({}, '', `${path}?code=forged&state=unsolicited&returnTo=https://evil.example`);
   await expect(session.initialize()).rejects.toThrow('Sign in failed');
   expect(session.getSnapshot()).toBe('anonymous');
   expect(await session.manager.getUser()).toBeNull();
+  expect(window.location.pathname).toBe('/');
+  expect(window.location.search).toBe('');
+});
+
+test.each(['/auth/callback', '/auth/callback/'])('%s exchanges the authorization code and opens the owner session', async (path) => {
+  const oidc = new OidcClient(session.manager.settings);
+  const request = await oidc.createSigninRequest({ request_type: 'si:r' });
+  const state = new URL(request.url).searchParams.get('state')!;
+  const user = owner();
+  const token = jwt(user.profile);
+  server.use(http.post(`${config.domain}/oauth2/token`, async ({ request }) => {
+    const body = new URLSearchParams(await request.text());
+    expect(body.get('grant_type')).toBe('authorization_code');
+    expect(body.get('code')).toBe('valid');
+    expect(body.get('redirect_uri')).toBe('http://localhost:3000/auth/callback');
+    expect(body.get('code_verifier')).toBeTruthy();
+    return HttpResponse.json({ id_token: token, access_token: 'access-token', refresh_token: 'refresh-token', token_type: 'Bearer', expires_in: 3600 });
+  }));
+  window.history.replaceState({}, '', `${path}?code=valid&state=${encodeURIComponent(state)}`);
+  await session.initialize();
+  expect(session.getSnapshot()).toBe('authenticated');
+  expect(await session.getIdToken()).toBe(token);
   expect(window.location.pathname).toBe('/');
   expect(window.location.search).toBe('');
 });
@@ -335,12 +357,12 @@ test('refresh requests remain serialized while a token endpoint response is pend
   expect(session.getSnapshot()).toBe('authenticated');
 });
 
-test('a popup callback notifies the original tab without consuming copied session state or mounting private routes', async () => {
+test.each(['/auth/callback', '/auth/callback/'])('a popup at %s notifies the original tab without consuming copied session state or mounting private routes', async (path) => {
   const oidc = new OidcClient(session.manager.settings);
   const request = await oidc.createSigninRequest({ request_type: 'si:p', url_state: 'reauth' });
   const state = new URL(request.url).searchParams.get('state')!;
   sessionStorage.clear(); // Popup sessionStorage does not receive the opener's later PKCE state.
-  window.history.replaceState({}, '', `/auth/callback?code=valid&state=${encodeURIComponent(state)}`);
+  window.history.replaceState({}, '', `${path}?code=valid&state=${encodeURIComponent(state)}`);
   const callback = vi.spyOn(session.manager, 'signinPopupCallback').mockResolvedValue();
   await session.initialize();
   expect(callback).toHaveBeenCalledWith(expect.stringContaining('code=valid'));
