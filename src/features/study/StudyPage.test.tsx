@@ -358,7 +358,8 @@ test('other cards continue while a failed card waits and unmount clears its time
     fireEvent.click(again);
     expect(await screen.findByText('Second card')).toBeInTheDocument();
     expect(screen.getByText('Reviews saved: 1 · 1 pending')).toBeInTheDocument();
-    expect(vi.getTimerCount()).toBe(1);
+    // The review clock and signed-image refresh both run while this card is active.
+    expect(vi.getTimerCount()).toBe(2);
     view.unmount();
     expect(vi.getTimerCount()).toBe(0);
   } finally { vi.useRealTimers(); }

@@ -1,3 +1,4 @@
+import { AuthContext } from '../auth/AuthProvider';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
@@ -8,13 +9,23 @@ export function renderApp(initialPath: string) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
+  const view = render(
     <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <MemoryRouter initialEntries={[initialPath]}>
-          <AppRoutes />
-        </MemoryRouter>
-      </ToastProvider>
+      <AuthContext.Provider value={{ logout: async () => {} }}>
+        <ToastProvider>
+          <MemoryRouter initialEntries={[initialPath]}>
+            <AppRoutes />
+          </MemoryRouter>
+        </ToastProvider>
+      </AuthContext.Provider>
     </QueryClientProvider>,
   );
+  return { ...view, queryClient };
+}
+
+export async function readImageUpload(request: Request, parent = 'cardId') {
+  const params = new URL(request.url).searchParams;
+  expect(request.headers.get('Content-Type')).toBe('image/png');
+  expect(request.headers.get('Authorization')).toBe('Bearer test-owner-id-token');
+  return { [parent === 'cardId' ? 'cardID' : 'cardAnswerSectionID']: params.get(parent), sequenceNumber: Number(params.get('sequenceNumber')), bytes: await request.text() };
 }

@@ -14,7 +14,6 @@ import {
   useUpdateCard,
   useUpdateQuestionImage,
 } from '../../api/hooks';
-import { uploadImageFile } from '../../api/resources';
 import type { CardAnswerSection } from '../../api/types';
 import { Breadcrumbs } from '../../components/Breadcrumbs';
 import type { Crumb } from '../../components/Breadcrumbs';
@@ -85,11 +84,10 @@ export function CardEditorPage() {
     try {
       let sequenceNumber = nextSequenceNumber(questionImages.data ?? []);
       for (const file of files) {
-        const imageUrl = await uploadImageFile(file, 'question');
         await createQuestionImage.mutateAsync({
           cardID: card.data.id,
           sequenceNumber: sequenceNumber++,
-          imageURL: imageUrl,
+          file,
         });
       }
     } catch (err) {
@@ -102,11 +100,11 @@ export function CardEditorPage() {
       await Promise.all([
         updateQuestionImage.mutateAsync({
           id: a.id,
-          body: { sequenceNumber: b.sequenceNumber, imageURL: a.imageURL },
+          body: { sequenceNumber: b.sequenceNumber },
         }),
         updateQuestionImage.mutateAsync({
           id: b.id,
-          body: { sequenceNumber: a.sequenceNumber, imageURL: b.imageURL },
+          body: { sequenceNumber: a.sequenceNumber },
         }),
       ]);
     } catch (err) {

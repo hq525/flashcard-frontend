@@ -1,4 +1,5 @@
 import { request } from './client';
+import { validateImageFile } from './media';
 import type {
   Card,
   CardReview,
@@ -17,7 +18,6 @@ import type {
   CreateDeckRequest,
   CreateTagRequest,
   Deck,
-  PresignResponse,
   Tag,
   UpdateCardAnswerSectionImageRequest,
   UpdateCardAnswerSectionRequest,
@@ -84,10 +84,10 @@ export const sectionsApi = {
 export const questionImagesApi = {
   list: (cardId: string) =>
     request<CardQuestionImage[]>('GET', '/card-question-images', { params: { cardId } }),
-  create: (body: CreateCardQuestionImageRequest) =>
-    request<CardQuestionImage>('POST', '/card-question-image', { body }),
+  create: ({ file, cardID, sequenceNumber }: CreateCardQuestionImageRequest) =>
+    uploadQuestionImage(file, cardID, sequenceNumber),
   update: (id: string, body: UpdateCardQuestionImageRequest) =>
-    request<CardQuestionImage>('PUT', '/card-question-image', { params: { id }, body }),
+    request<CardQuestionImage>('PUT', '/card-question-image', { params: { id }, body: { sequenceNumber: body.sequenceNumber } }),
   remove: (id: string) =>
     request<CardQuestionImage>('DELETE', '/card-question-image', { params: { id } }),
 };
@@ -97,32 +97,20 @@ export const sectionImagesApi = {
     request<CardAnswerSectionImage[]>('GET', '/card-answer-section-images', {
       params: { cardAnswerSectionId },
     }),
-  create: (body: CreateCardAnswerSectionImageRequest) =>
-    request<CardAnswerSectionImage>('POST', '/card-answer-section-image', { body }),
+  create: ({ file, cardAnswerSectionID, sequenceNumber }: CreateCardAnswerSectionImageRequest) =>
+    uploadSectionImage(file, cardAnswerSectionID, sequenceNumber),
   update: (id: string, body: UpdateCardAnswerSectionImageRequest) =>
-    request<CardAnswerSectionImage>('PUT', '/card-answer-section-image', { params: { id }, body }),
+    request<CardAnswerSectionImage>('PUT', '/card-answer-section-image', { params: { id }, body: { sequenceNumber: body.sequenceNumber } }),
   remove: (id: string) =>
     request<CardAnswerSectionImage>('DELETE', '/card-answer-section-image', { params: { id } }),
 };
 
-// Presign → PUT the bytes to S3 (no API key — it's S3, not the API) → return
-// the public URL to store on the image record.
-export async function uploadImageFile(
-  file: File,
-  imageType: 'question' | 'answer',
-): Promise<string> {
-  const params: Record<string, string> = { fileName: file.name, contentType: file.type };
-  if (imageType === 'answer') params.imageType = 'answer';
-  const { presignedUrl, imageUrl } = await request<PresignResponse>('GET', '/presigned-url', {
-    params,
-  });
+export async function uploadQuestionImage(file: File, cardId: string, sequenceNumber: number) {
+  validateImageFile(file);
+  return request<CardQuestionImage>('POST', '/card-question-image', { file, params: { cardId, sequenceNumber: String(sequenceNumber) } });
+}
 
-  const buffer = await file.arrayBuffer();
-  const res = await fetch(presignedUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': file.type },
-    body: buffer,
-  });
-  if (!res.ok) throw new Error('Image upload failed');
-  return imageUrl;
+export async function uploadSectionImage(file: File, cardAnswerSectionId: string, sequenceNumber: number) {
+  validateImageFile(file);
+  return request<CardAnswerSectionImage>('POST', '/card-answer-section-image', { file, params: { cardAnswerSectionId, sequenceNumber: String(sequenceNumber) } });
 }

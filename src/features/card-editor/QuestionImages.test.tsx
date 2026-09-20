@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../test/server';
 import { makeCard, makeCategory, makeDeck, makeQuestionImage } from '../../test/fixtures';
-import { renderApp } from '../../test/utils';
+import { renderApp, readImageUpload } from '../../test/utils';
 import type { CardQuestionImage } from '../../api/types';
 
 function useEditorHandlers(images: CardQuestionImage[]) {
@@ -21,27 +21,14 @@ function useEditorHandlers(images: CardQuestionImage[]) {
   return images;
 }
 
-test('uploads a question image: presign, S3 PUT, record POST with next sequence number', async () => {
+test('uploads a question image through the API with the next sequence number', async () => {
   const user = userEvent.setup();
   const images = useEditorHandlers([makeQuestionImage()]);
-  let presignParams: URLSearchParams | null = null;
-  let s3ContentType: string | null = null;
   let postBody: unknown = null;
   server.use(
-    http.get('http://localhost:8080/presigned-url', ({ request: req }) => {
-      presignParams = new URL(req.url).searchParams;
-      return HttpResponse.json({
-        presignedUrl: 'http://localhost:8080/s3-upload',
-        imageUrl: 'https://cdn/new.png',
-      });
-    }),
-    http.put('http://localhost:8080/s3-upload', ({ request: req }) => {
-      s3ContentType = req.headers.get('Content-Type');
-      return new HttpResponse(null, { status: 200 });
-    }),
     http.post('http://localhost:8080/card-question-image', async ({ request: req }) => {
-      postBody = await req.json();
-      const created = makeQuestionImage({ id: 'qimg-2', sequenceNumber: 2, imageURL: 'https://cdn/new.png' });
+      postBody = await readImageUpload(req);
+      const created = makeQuestionImage({ id: 'qimg-2', sequenceNumber: 2, imageURL: 'https://bucket.s3.amazonaws.com/new.png' });
       images.push(created);
       return HttpResponse.json(created, { status: 201 });
     }),
@@ -51,12 +38,8 @@ test('uploads a question image: presign, S3 PUT, record POST with next sequence 
   await user.upload(input, new File(['img-bytes'], 'new.png', { type: 'image/png' }));
 
   await waitFor(() =>
-    expect(postBody).toEqual({ cardID: 'card-1', sequenceNumber: 2, imageURL: 'https://cdn/new.png' }),
+    expect(postBody).toEqual({ cardID: 'card-1', sequenceNumber: 2, bytes: 'img-bytes' }),
   );
-  expect(presignParams!.get('fileName')).toBe('new.png');
-  expect(presignParams!.get('contentType')).toBe('image/png');
-  expect(presignParams!.has('imageType')).toBe(false);
-  expect(s3ContentType).toBe('image/png');
   expect(await screen.findByAltText('Question images 2')).toBeInTheDocument();
 });
 
@@ -64,21 +47,13 @@ test('dropping two files uploads both with consecutive sequence numbers', async 
   const images = useEditorHandlers([makeQuestionImage()]);
   const postBodies: unknown[] = [];
   server.use(
-    http.get('http://localhost:8080/presigned-url', ({ request: req }) => {
-      const fileName = new URL(req.url).searchParams.get('fileName');
-      return HttpResponse.json({
-        presignedUrl: 'http://localhost:8080/s3-upload',
-        imageUrl: `https://cdn/${fileName}`,
-      });
-    }),
-    http.put('http://localhost:8080/s3-upload', () => new HttpResponse(null, { status: 200 })),
     http.post('http://localhost:8080/card-question-image', async ({ request: req }) => {
-      const body = (await req.json()) as { sequenceNumber: number; imageURL: string };
+      const body = await readImageUpload(req);
       postBodies.push(body);
       const created = makeQuestionImage({
         id: `qimg-${body.sequenceNumber}`,
         sequenceNumber: body.sequenceNumber,
-        imageURL: body.imageURL,
+        imageURL: 'https://bucket.s3.amazonaws.com/images/uploaded.png',
       });
       images.push(created);
       return HttpResponse.json(created, { status: 201 });
@@ -97,8 +72,8 @@ test('dropping two files uploads both with consecutive sequence numbers', async 
 
   await waitFor(() =>
     expect(postBodies).toEqual([
-      { cardID: 'card-1', sequenceNumber: 2, imageURL: 'https://cdn/a.png' },
-      { cardID: 'card-1', sequenceNumber: 3, imageURL: 'https://cdn/b.png' },
+      { cardID: 'card-1', sequenceNumber: 2, bytes: 'a' },
+      { cardID: 'card-1', sequenceNumber: 3, bytes: 'b' },
     ]),
   );
 });
@@ -107,16 +82,9 @@ test('pasting an image on a focused dropzone uploads it to that strip', async ()
   const images = useEditorHandlers([makeQuestionImage()]);
   let postBody: unknown = null;
   server.use(
-    http.get('http://localhost:8080/presigned-url', () =>
-      HttpResponse.json({
-        presignedUrl: 'http://localhost:8080/s3-upload',
-        imageUrl: 'https://cdn/pasted.png',
-      }),
-    ),
-    http.put('http://localhost:8080/s3-upload', () => new HttpResponse(null, { status: 200 })),
     http.post('http://localhost:8080/card-question-image', async ({ request: req }) => {
-      postBody = await req.json();
-      const created = makeQuestionImage({ id: 'qimg-2', sequenceNumber: 2, imageURL: 'https://cdn/pasted.png' });
+      postBody = await readImageUpload(req);
+      const created = makeQuestionImage({ id: 'qimg-2', sequenceNumber: 2, imageURL: 'https://bucket.s3.amazonaws.com/pasted.png' });
       images.push(created);
       return HttpResponse.json(created, { status: 201 });
     }),
@@ -129,7 +97,7 @@ test('pasting an image on a focused dropzone uploads it to that strip', async ()
   });
 
   await waitFor(() =>
-    expect(postBody).toEqual({ cardID: 'card-1', sequenceNumber: 2, imageURL: 'https://cdn/pasted.png' }),
+    expect(postBody).toEqual({ cardID: 'card-1', sequenceNumber: 2, bytes: 'p' }),
   );
 });
 
@@ -137,7 +105,7 @@ test('reordering swaps the sequence numbers of adjacent images', async () => {
   const user = userEvent.setup();
   useEditorHandlers([
     makeQuestionImage(),
-    makeQuestionImage({ id: 'qimg-2', sequenceNumber: 2, imageURL: 'https://cdn/2.png' }),
+    makeQuestionImage({ id: 'qimg-2', sequenceNumber: 2, imageURL: 'https://bucket.s3.amazonaws.com/2.png' }),
   ]);
   const puts: Array<{ id: string | null; body: unknown }> = [];
   server.use(
@@ -154,11 +122,11 @@ test('reordering swaps the sequence numbers of adjacent images', async () => {
   await waitFor(() => expect(puts).toHaveLength(2));
   expect(puts).toContainEqual({
     id: 'qimg-1',
-    body: { sequenceNumber: 2, imageURL: 'https://bucket.s3.amazonaws.com/question-images/qimg-1.png' },
+    body: { sequenceNumber: 2 },
   });
   expect(puts).toContainEqual({
     id: 'qimg-2',
-    body: { sequenceNumber: 1, imageURL: 'https://cdn/2.png' },
+    body: { sequenceNumber: 1 },
   });
 });
 

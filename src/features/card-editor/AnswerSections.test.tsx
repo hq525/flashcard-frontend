@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../test/server';
 import { makeCard, makeCategory, makeDeck, makeSection, makeSectionImage } from '../../test/fixtures';
-import { renderApp } from '../../test/utils';
+import { renderApp, readImageUpload } from '../../test/utils';
 import type { CardAnswerSection, CardAnswerSectionImage } from '../../api/types';
 
 function useEditorHandlers(
@@ -123,22 +123,13 @@ test('deletes a section after an image-cascade confirm', async () => {
   await waitFor(() => expect(deleteId).toBe('sec-1'));
 });
 
-test('uploads a section image with imageType=answer', async () => {
+test('uploads a section image to its typed parent', async () => {
   const user = userEvent.setup();
   useEditorHandlers([makeSection()], []);
-  let presignParams: URLSearchParams | null = null;
   let postBody: unknown = null;
   server.use(
-    http.get('http://localhost:8080/presigned-url', ({ request: req }) => {
-      presignParams = new URL(req.url).searchParams;
-      return HttpResponse.json({
-        presignedUrl: 'http://localhost:8080/s3-upload',
-        imageUrl: 'https://cdn/ans.png',
-      });
-    }),
-    http.put('http://localhost:8080/s3-upload', () => new HttpResponse(null, { status: 200 })),
     http.post('http://localhost:8080/card-answer-section-image', async ({ request: req }) => {
-      postBody = await req.json();
+      postBody = await readImageUpload(req, 'cardAnswerSectionId');
       return HttpResponse.json(makeSectionImage({ imageURL: 'https://cdn/ans.png' }), { status: 201 });
     }),
   );
@@ -150,25 +141,17 @@ test('uploads a section image with imageType=answer', async () => {
     expect(postBody).toEqual({
       cardAnswerSectionID: 'sec-1',
       sequenceNumber: 1,
-      imageURL: 'https://cdn/ans.png',
+      bytes: 'b',
     }),
   );
-  expect(presignParams!.get('imageType')).toBe('answer');
 });
 
 test('dropping a file on a section dropzone uploads it', async () => {
   useEditorHandlers([makeSection()], []);
   let postBody: unknown = null;
   server.use(
-    http.get('http://localhost:8080/presigned-url', () =>
-      HttpResponse.json({
-        presignedUrl: 'http://localhost:8080/s3-upload',
-        imageUrl: 'https://cdn/ans.png',
-      }),
-    ),
-    http.put('http://localhost:8080/s3-upload', () => new HttpResponse(null, { status: 200 })),
     http.post('http://localhost:8080/card-answer-section-image', async ({ request: req }) => {
-      postBody = await req.json();
+      postBody = await readImageUpload(req, 'cardAnswerSectionId');
       return HttpResponse.json(makeSectionImage({ imageURL: 'https://cdn/ans.png' }), { status: 201 });
     }),
   );
@@ -182,7 +165,7 @@ test('dropping a file on a section dropzone uploads it', async () => {
     expect(postBody).toEqual({
       cardAnswerSectionID: 'sec-1',
       sequenceNumber: 1,
-      imageURL: 'https://cdn/ans.png',
+      bytes: 'b',
     }),
   );
 });

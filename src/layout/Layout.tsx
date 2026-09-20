@@ -1,6 +1,11 @@
+import { useAuth } from '../auth/AuthProvider';
+import { Button } from '../components/Button';
+import { useToast } from '../components/Toast';
 import { Link, NavLink, Outlet } from 'react-router';
 
 export function Layout() {
+  const { logout } = useAuth();
+  const { showToast } = useToast();
   return (
     <div className="min-h-dvh bg-gray-50 text-gray-900">
       <header className="border-b border-gray-200 bg-white">
@@ -8,7 +13,7 @@ export function Layout() {
           <Link to="/" className="text-lg font-bold">
             Flashcards
           </Link>
-          <nav>
+          <nav className="flex items-center gap-4">
             <NavLink
               to="/tags"
               className={({ isActive }) =>
@@ -21,6 +26,7 @@ export function Layout() {
             >
               Tags
             </NavLink>
+            <Button variant="ghost" onClick={() => { void logout().catch(() => showToast('Signed out locally. Close this tab to finish.')); }}>Sign out</Button>
           </nav>
         </div>
       </header>

@@ -170,24 +170,12 @@ export interface UpdateCardAnswerSectionRequest {
 export interface CreateCardQuestionImageRequest {
   cardID: string;
   sequenceNumber: number;
-  imageURL: string;
+  file: File;
 }
-export interface UpdateCardQuestionImageRequest {
-  sequenceNumber: number;
-  imageURL: string;
-}
-
+export interface UpdateCardQuestionImageRequest { sequenceNumber: number }
 export interface CreateCardAnswerSectionImageRequest {
   cardAnswerSectionID: string;
   sequenceNumber: number;
-  imageURL: string;
+  file: File;
 }
-export interface UpdateCardAnswerSectionImageRequest {
-  sequenceNumber: number;
-  imageURL: string;
-}
-
-export interface PresignResponse {
-  presignedUrl: string;
-  imageUrl: string;
-}
+export interface UpdateCardAnswerSectionImageRequest { sequenceNumber: number }

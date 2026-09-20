@@ -1,4 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useContext } from 'react';
+import { AuthContext } from '../auth/AuthProvider';
+import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import {
   cardsApi,
   cardReviewsApi,
@@ -11,6 +13,8 @@ import {
 } from './resources';
 import type {
   Card,
+  CardQuestionImage,
+  CardAnswerSectionImage,
   ReviewCardRequest,
   UpdateCardAnswerSectionImageRequest,
   UpdateCardAnswerSectionRequest,
@@ -20,6 +24,22 @@ import type {
   UpdateDeckRequest,
   UpdateTagRequest,
 } from './types';
+
+// Consult the live session in both old and new observer options. This stops
+// reconnect/focus refetches immediately when locked, without a false→true
+// enabled transition refetching cached form data when the same owner returns.
+// Signed image URLs may expire during a lock, so image metadata opts into a
+// stale-only resume refresh. Form content keeps its cached data untouched.
+function usePrivateQuery<T>(options: UseQueryOptions<T>, refetchStaleOnResume = false) {
+  const auth = useContext(AuthContext);
+  const locked = auth?.getStatus?.() === 'locked';
+  return useQuery({
+    ...options,
+    enabled: (query) => (!refetchStaleOnResume || !locked) && (!auth?.getStatus || auth.getStatus() === 'authenticated')
+      && (typeof options.enabled === 'function' ? options.enabled(query) : options.enabled !== false),
+    refetchInterval: locked ? false : options.refetchInterval,
+  });
+}
 
 export const queryKeys = {
   categories: ['categories'] as const,
@@ -49,7 +69,7 @@ const byCreatedDateTime = <T extends { createdDateTime: string }>(items: T[]): T
 // --- Categories ---
 
 export function useCategories() {
-  return useQuery({
+  return usePrivateQuery({
     queryKey: queryKeys.categories,
     queryFn: categoriesApi.list,
     select: byName,
@@ -57,7 +77,7 @@ export function useCategories() {
 }
 
 export function useCategory(id: string | undefined) {
-  return useQuery({
+  return usePrivateQuery({
     queryKey: queryKeys.category(id ?? ''),
     queryFn: () => categoriesApi.get(id!),
     enabled: !!id,
@@ -98,7 +118,7 @@ export function useDeleteCategory() {
 // --- Decks ---
 
 export function useDecks(categoryId: string) {
-  return useQuery({
+  return usePrivateQuery({
     queryKey: queryKeys.decks(categoryId),
     queryFn: () => decksApi.list(categoryId),
     select: byName,
@@ -106,7 +126,7 @@ export function useDecks(categoryId: string) {
 }
 
 export function useDeck(id: string | undefined) {
-  return useQuery({
+  return usePrivateQuery({
     queryKey: queryKeys.deck(id ?? ''),
     queryFn: () => decksApi.get(id!),
     enabled: !!id,
@@ -148,7 +168,7 @@ export function useDeleteDeck() {
 // --- Tags ---
 
 export function useTags() {
-  return useQuery({ queryKey: queryKeys.tags, queryFn: tagsApi.list, select: byName });
+  return usePrivateQuery({ queryKey: queryKeys.tags, queryFn: tagsApi.list, select: byName });
 }
 
 export function useCreateTag() {
@@ -187,7 +207,7 @@ function preserveReview(incoming: Card, cached: Card | undefined): Card {
 
 export function useCards(deckId: string) {
   const qc = useQueryClient();
-  return useQuery({
+  return usePrivateQuery({
     queryKey: queryKeys.cards(deckId),
     queryFn: async () => {
       const incoming = await cardsApi.list(deckId);
@@ -201,7 +221,7 @@ export function useCards(deckId: string) {
 
 export function useCard(id: string | undefined) {
   const qc = useQueryClient();
-  return useQuery({
+  return usePrivateQuery({
     queryKey: queryKeys.card(id ?? ''),
     queryFn: async () => {
       const incoming = await cardsApi.get(id!);
@@ -245,7 +265,7 @@ async function cacheReviewedCard(qc: ReturnType<typeof useQueryClient>, card: Ca
 }
 
 export function useReviewOptions(card: Card | undefined, enabled: boolean) {
-  return useQuery({
+  return usePrivateQuery({
     queryKey: queryKeys.reviewOptions(card?.id ?? '', card?.reviewRevision ?? 0),
     queryFn: () => cardReviewsApi.options(card!.id),
     enabled: !!card && enabled,
@@ -289,7 +309,7 @@ export function useDeleteCard() {
 // --- Answer sections ---
 
 export function useAnswerSections(cardId: string) {
-  return useQuery({
+  return usePrivateQuery({
     queryKey: queryKeys.answerSections(cardId),
     queryFn: () => sectionsApi.list(cardId),
   });
@@ -328,18 +348,23 @@ export function useDeleteAnswerSection() {
 // --- Question images ---
 
 export function useQuestionImages(cardId: string) {
-  return useQuery({
+  return usePrivateQuery({
     queryKey: queryKeys.questionImages(cardId),
     queryFn: () => questionImagesApi.list(cardId),
-  });
+    staleTime: 4 * 60 * 1000,
+    refetchInterval: 4 * 60 * 1000,
+    refetchOnWindowFocus: true,
+  }, true);
 }
 
 export function useCreateQuestionImage() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: questionImagesApi.create,
-    onSuccess: (created) =>
-      qc.invalidateQueries({ queryKey: queryKeys.questionImages(created.cardID) }),
+    onSuccess: (created) => {
+      qc.setQueryData<CardQuestionImage[]>(queryKeys.questionImages(created.cardID), (images = []) =>
+        [...images.filter((image) => image.id !== created.id), created]);
+    },
   });
 }
 
@@ -365,18 +390,23 @@ export function useDeleteQuestionImage() {
 // --- Section images ---
 
 export function useSectionImages(sectionId: string) {
-  return useQuery({
+  return usePrivateQuery({
     queryKey: queryKeys.sectionImages(sectionId),
     queryFn: () => sectionImagesApi.list(sectionId),
-  });
+    staleTime: 4 * 60 * 1000,
+    refetchInterval: 4 * 60 * 1000,
+    refetchOnWindowFocus: true,
+  }, true);
 }
 
 export function useCreateSectionImage() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: sectionImagesApi.create,
-    onSuccess: (created) =>
-      qc.invalidateQueries({ queryKey: queryKeys.sectionImages(created.cardAnswerSectionID) }),
+    onSuccess: (created) => {
+      qc.setQueryData<CardAnswerSectionImage[]>(queryKeys.sectionImages(created.cardAnswerSectionID), (images = []) =>
+        [...images.filter((image) => image.id !== created.id), created]);
+    },
   });
 }
 

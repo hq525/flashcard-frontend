@@ -1,0 +1,60 @@
+# Exact production API, Cognito hosted domain, and private media origin.
+# Update together with VITE_* configuration when deploying another environment.
+customHeaders:
+  - pattern: '**'
+    headers:
+      - key: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https://flash-card-app-media-prod.s3.ap-southeast-1.amazonaws.com; connect-src 'self' https://nzbsoybije.execute-api.ap-southeast-1.amazonaws.com https://cognito-idp.ap-southeast-1.amazonaws.com https://flashcards-725020099811-ap-southeast-1-prod.auth.ap-southeast-1.amazoncognito.com; object-src 'none'; base-uri 'none'; frame-src 'none'; frame-ancestors 'none'; form-action 'self' https://flashcards-725020099811-ap-southeast-1-prod.auth.ap-southeast-1.amazoncognito.com; upgrade-insecure-requests"
+      - key: X-Frame-Options
+        value: DENY
+      - key: X-Content-Type-Options
+        value: nosniff
+      - key: Referrer-Policy
+        value: no-referrer
+      - key: Strict-Transport-Security
+        value: max-age=31536000; includeSubDomains
+      - key: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=()
+  # Only Vite's content-hashed output belongs under /assets/.
+  # Custom Cache-Control takes precedence over Amplify's defaults:
+  # https://docs.aws.amazon.com/amplify/latest/userguide/setting-custom-headers.html
+  - pattern: '/assets/**'
+    headers:
+      - key: Cache-Control
+        value: public, max-age=31536000, immutable
+  # Cache rules are disjoint: do not rely on overlapping header precedence or
+  # whether Amplify matches a URL before/after the SPA rewrite to index.html.
+  # Keep these viewer paths aligned with AppRoutes and the sign-in callback.
+  # https://docs.aws.amazon.com/amplify/latest/userguide/custom-header-YAML-format.html
+  - pattern: '/'
+    headers:
+      - key: Cache-Control
+        value: no-cache, max-age=0, must-revalidate
+  - pattern: '/index.html'
+    headers:
+      - key: Cache-Control
+        value: no-cache, max-age=0, must-revalidate
+  - pattern: '/auth/**'
+    headers:
+      - key: Cache-Control
+        value: no-cache, max-age=0, must-revalidate
+  - pattern: '/tags'
+    headers:
+      - key: Cache-Control
+        value: no-cache, max-age=0, must-revalidate
+  - pattern: '/tags/**'
+    headers:
+      - key: Cache-Control
+        value: no-cache, max-age=0, must-revalidate
+  - pattern: '/categories/**'
+    headers:
+      - key: Cache-Control
+        value: no-cache, max-age=0, must-revalidate
+  - pattern: '/decks/**'
+    headers:
+      - key: Cache-Control
+        value: no-cache, max-age=0, must-revalidate
+  - pattern: '/cards/**'
+    headers:
+      - key: Cache-Control
+        value: no-cache, max-age=0, must-revalidate

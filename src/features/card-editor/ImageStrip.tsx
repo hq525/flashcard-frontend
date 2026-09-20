@@ -1,3 +1,5 @@
+import { MediaImage } from '../../components/MediaImage';
+import { acceptedImageTypes, imageHelp, validateImageFile } from '../../api/media';
 import { useRef, useState } from 'react';
 import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -14,9 +16,6 @@ export function nextSequenceNumber(items: { sequenceNumber: number }[]): number 
   return items.reduce((max, item) => Math.max(max, item.sequenceNumber), 0) + 1;
 }
 
-// Same ceiling as the card-creation dialog.
-const maxImageBytes = 10 * 1024 * 1024;
-
 interface ImageStripProps {
   title: string;
   images: StripImage[];
@@ -32,14 +31,14 @@ export function ImageStrip({ title, images, onUpload, onDelete, onSwap }: ImageS
   const [dragOver, setDragOver] = useState(false);
   const sorted = [...images].sort((a, b) => a.sequenceNumber - b.sequenceNumber);
 
-  // accept="image/*" only guards the file picker; drops can contain anything.
+  // accept={acceptedImageTypes} only guards the file picker; drops can contain anything.
   const addFiles = (list: FileList | null) => {
     if (!list) return;
     const files = Array.from(list);
-    const imageFiles = files.filter((file) => file.type.startsWith('image/'));
-    if (imageFiles.length < files.length) showToast('Only image files can be added');
-    const sizedFiles = imageFiles.filter((file) => file.size <= maxImageBytes);
-    if (sizedFiles.length < imageFiles.length) showToast('Images must be 10MB or smaller');
+    const sizedFiles = files.filter((file) => {
+      try { validateImageFile(file); return true; }
+      catch (error) { showToast((error as Error).message); return false; }
+    });
     if (sizedFiles.length > 0) onUpload(sizedFiles);
   };
 
@@ -49,7 +48,7 @@ export function ImageStrip({ title, images, onUpload, onDelete, onSwap }: ImageS
       <ul className="flex gap-3 overflow-x-auto pb-1">
         {sorted.map((image, i) => (
           <li key={image.id} className="flex shrink-0 flex-col gap-1">
-            <img
+            <MediaImage
               src={image.imageURL}
               alt={`${title} ${i + 1}`}
               className="h-32 w-32 rounded-md border border-gray-200 object-cover"
@@ -117,10 +116,11 @@ export function ImageStrip({ title, images, onUpload, onDelete, onSwap }: ImageS
           </button>
         </li>
       </ul>
+      <p className="mt-2 text-xs text-gray-500">{imageHelp}</p>
       <input
         ref={fileInput}
         type="file"
-        accept="image/*"
+        accept={acceptedImageTypes}
         multiple
         aria-label={`${title} file`}
         className="hidden"

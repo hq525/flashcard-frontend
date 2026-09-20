@@ -157,3 +157,33 @@ test('saved review state survives older deck and card refetches while newer cont
   expect(card.result.current.data!.schedule).toEqual(after.schedule);
   expect(card.result.current.data!.reviewRevision).toBe(1);
 });
+
+test('a created image appears immediately from the returned DTO without waiting on an eventually consistent list', async () => {
+  const { useCreateQuestionImage, useQuestionImages } = await import('./hooks');
+  const { makeQuestionImage } = await import('../test/fixtures');
+  const image = makeQuestionImage({ id: 'fresh' });
+  server.use(
+    http.get('http://localhost:8080/card-question-images', () => HttpResponse.json([])),
+    http.post('http://localhost:8080/card-question-image', () => HttpResponse.json(image, { status: 201 })),
+  );
+  const { result } = renderHook(() => ({ images: useQuestionImages('card-1'), create: useCreateQuestionImage() }), { wrapper: createWrapper() });
+  await waitFor(() => expect(result.current.images.isSuccess).toBe(true));
+  await act(() => result.current.create.mutateAsync({ cardID: 'card-1', sequenceNumber: 1, file: new File(['x'], 'x.png', { type: 'image/png' }) }));
+  await waitFor(() => expect(result.current.images.data).toEqual([image]));
+});
+
+test('active image queries refresh their signed URLs after four minutes', async () => {
+  const { useQuestionImages } = await import('./hooks');
+  const { makeQuestionImage } = await import('../test/fixtures');
+  let reads = 0;
+  server.use(http.get('http://localhost:8080/card-question-images', () => HttpResponse.json([makeQuestionImage({ imageURL: `https://bucket.s3.amazonaws.com/image.png?signature=${++reads}` })])));
+  vi.useFakeTimers();
+  try {
+    const view = renderHook(() => useQuestionImages('card-1'), { wrapper: createWrapper() });
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    expect(view.result.current.data?.[0].imageURL).toContain('signature=1');
+    await act(() => vi.advanceTimersByTimeAsync(4 * 60 * 1000));
+    expect(view.result.current.data?.[0].imageURL).toContain('signature=2');
+    view.unmount();
+  } finally { vi.useRealTimers(); }
+});

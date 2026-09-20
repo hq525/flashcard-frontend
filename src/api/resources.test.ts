@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import { server } from '../test/server';
 import { makeCard, makeCategory, makeDeck } from '../test/fixtures';
-import { cardsApi, categoriesApi, decksApi, uploadImageFile } from './resources';
+import { cardsApi, categoriesApi, decksApi, uploadQuestionImage, uploadSectionImage } from './resources';
 
 test('categoriesApi covers list/get/create/update/remove with correct routes', async () => {
   const cat = makeCategory();
@@ -50,45 +50,28 @@ test('list functions pass the parent-id query param', async () => {
   expect(cardParam).toBe('deck-1');
 });
 
-test('uploadImageFile presigns, PUTs to S3 with the file content type, and returns imageUrl', async () => {
-  const s3Url = 'http://localhost:8080/s3-upload';
-  let presignParams: URLSearchParams | null = null;
-  let s3ContentType: string | null = null;
-  let s3Body: ArrayBuffer | null = null;
-  server.use(
-    http.get('http://localhost:8080/presigned-url', ({ request: req }) => {
-      presignParams = new URL(req.url).searchParams;
-      return HttpResponse.json({ presignedUrl: s3Url, imageUrl: 'https://cdn/img.png' });
-    }),
-    http.put(s3Url, async ({ request: req }) => {
-      s3ContentType = req.headers.get('Content-Type');
-      s3Body = await req.arrayBuffer();
-      return new HttpResponse(null, { status: 200 });
-    }),
-  );
-
-  const file = new File(['fake-bytes'], 'diagram.png', { type: 'image/png' });
-  const imageUrl = await uploadImageFile(file, 'answer');
-
-  expect(imageUrl).toBe('https://cdn/img.png');
-  expect(presignParams!.get('fileName')).toBe('diagram.png');
-  expect(presignParams!.get('contentType')).toBe('image/png');
-  expect(presignParams!.get('imageType')).toBe('answer');
-  expect(s3ContentType).toBe('image/png');
-  expect(new TextDecoder().decode(s3Body!)).toBe('fake-bytes');
+test.each([
+  ['question', '/card-question-image', 'cardId'],
+  ['answer', '/card-answer-section-image', 'cardAnswerSectionId'],
+])('uploads %s bytes through the authenticated API and returns its DTO', async (kind, path, parent) => {
+  let received: unknown;
+  const created = { id: 'new-image', sequenceNumber: 2, imageURL: 'https://bucket.s3.amazonaws.com/images/id.png?signature=abc' };
+  server.use(http.post(`http://localhost:8080${path}`, async ({ request }) => {
+    received = {
+      parent: new URL(request.url).searchParams.get(parent),
+      sequence: new URL(request.url).searchParams.get('sequenceNumber'),
+      type: request.headers.get('Content-Type'),
+      authorization: request.headers.get('Authorization'),
+      body: await request.text(),
+    };
+    return HttpResponse.json(created, { status: 201 });
+  }));
+  const upload = kind === 'question' ? uploadQuestionImage : uploadSectionImage;
+  expect(await upload(new File(['image bytes'], 'photo.png', { type: 'image/png' }), 'parent-1', 2)).toEqual(created);
+  expect(received).toEqual({ parent: 'parent-1', sequence: '2', type: 'image/png', authorization: 'Bearer test-owner-id-token', body: 'image bytes' });
 });
 
-test('uploadImageFile omits imageType for question images and rejects on S3 failure', async () => {
-  let presignParams: URLSearchParams | null = null;
-  server.use(
-    http.get('http://localhost:8080/presigned-url', ({ request: req }) => {
-      presignParams = new URL(req.url).searchParams;
-      return HttpResponse.json({ presignedUrl: 'http://localhost:8080/s3-upload', imageUrl: 'https://cdn/q.png' });
-    }),
-    http.put('http://localhost:8080/s3-upload', () => new HttpResponse(null, { status: 403 })),
-  );
-
-  const file = new File(['x'], 'q.png', { type: 'image/png' });
-  await expect(uploadImageFile(file, 'question')).rejects.toThrow('Image upload failed');
-  expect(presignParams!.has('imageType')).toBe(false);
+test('rejects unsupported and oversized images before a network request', async () => {
+  await expect(uploadQuestionImage(new File(['svg'], 'x.svg', { type: 'image/svg+xml' }), 'card-1', 1)).rejects.toThrow(/JPEG, PNG, GIF or WebP/);
+  await expect(uploadQuestionImage(new File([new Uint8Array(4 * 1024 * 1024 + 1)], 'x.png', { type: 'image/png' }), 'card-1', 1)).rejects.toThrow(/4 MiB/);
 });

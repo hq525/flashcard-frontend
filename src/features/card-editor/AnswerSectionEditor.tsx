@@ -7,7 +7,6 @@ import {
   useUpdateAnswerSection,
   useUpdateSectionImage,
 } from '../../api/hooks';
-import { uploadImageFile } from '../../api/resources';
 import type { CardAnswerSection } from '../../api/types';
 import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -71,11 +70,10 @@ export function AnswerSectionEditor({
     try {
       let sequenceNumber = nextSequenceNumber(images.data ?? []);
       for (const file of files) {
-        const imageUrl = await uploadImageFile(file, 'answer');
         await createImage.mutateAsync({
           cardAnswerSectionID: section.id,
           sequenceNumber: sequenceNumber++,
-          imageURL: imageUrl,
+          file,
         });
       }
     } catch (err) {
@@ -88,11 +86,11 @@ export function AnswerSectionEditor({
       await Promise.all([
         updateImage.mutateAsync({
           id: a.id,
-          body: { sequenceNumber: b.sequenceNumber, imageURL: a.imageURL },
+          body: { sequenceNumber: b.sequenceNumber },
         }),
         updateImage.mutateAsync({
           id: b.id,
-          body: { sequenceNumber: a.sequenceNumber, imageURL: b.imageURL },
+          body: { sequenceNumber: a.sequenceNumber },
         }),
       ]);
     } catch (err) {

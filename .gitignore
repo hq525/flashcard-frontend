@@ -1,7 +1,7 @@
 node_modules
 dist
 .claude/
-.env.local
-.env*.local
-.env.production
+.env
+.env.*
+!.env.example
 *.log

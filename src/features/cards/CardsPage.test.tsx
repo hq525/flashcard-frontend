@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../test/server';
 import { makeCard, makeCategory, makeDeck, makeQuestionImage, makeTag } from '../../test/fixtures';
-import { renderApp } from '../../test/utils';
+import { renderApp, readImageUpload } from '../../test/utils';
 
 function useDeckPageHandlers(cards = [makeCard()]) {
   server.use(
@@ -23,6 +23,18 @@ function useDeckPageHandlers(cards = [makeCard()]) {
     http.get('http://localhost:8080/card-answer-sections', () => HttpResponse.json([])),
   );
   return cards;
+}
+
+// Closing the create dialog starts a new route and its queries. Keep this
+// test's handlers alive until that editor has rendered and all requests settle.
+async function waitForCreatedCardEditor(view: ReturnType<typeof renderApp>) {
+  expect(await screen.findByRole('heading', { name: 'Edit card', level: 1 })).toBeInTheDocument();
+  await waitFor(() => {
+    expect(view.queryClient.isFetching()).toBe(0);
+    expect(view.queryClient.isMutating()).toBe(0);
+    expect(view.queryClient.getQueryCache().getAll().filter((query) => query.state.status === 'error')).toEqual([]);
+  });
+  expect(screen.getByLabelText('Question')).toHaveValue('What is DNA?');
 }
 
 test('lists cards with memorized badge, tag chips, and editor links', async () => {
@@ -97,11 +109,11 @@ test('creates a card with tags and navigates toward its editor', async () => {
       return HttpResponse.json(makeCard({ id: 'card-2', question: 'What is DNA?' }), { status: 201 });
     }),
   );
-  renderApp('/decks/deck-1');
+  const view = renderApp('/decks/deck-1');
   await user.click(await screen.findByRole('button', { name: 'New card' }));
   await user.type(screen.getByLabelText('Question'), 'What is DNA?');
   await user.click(screen.getByRole('button', { name: 'Select tags' }));
-  await user.click(screen.getByRole('checkbox', { name: 'exam' }));
+  await user.click(await screen.findByRole('checkbox', { name: 'exam' }));
   await user.click(screen.getByRole('button', { name: 'Create' }));
 
   await waitFor(() =>
@@ -109,6 +121,7 @@ test('creates a card with tags and navigates toward its editor', async () => {
   );
   // Navigation to the editor closes the dialog.
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitForCreatedCardEditor(view);
 });
 
 test('tag multiselect shows "No tags available" in its dropdown when there are no tags', async () => {
@@ -124,9 +137,9 @@ test('tag multiselect shows "No tags available" in its dropdown when there are n
   expect(await screen.findByText('No tags available')).toBeInTheDocument();
 });
 
-test('creates a card with images: uploads each via presign and records in order', async () => {
+test('creates a card with images: uploads each through the API in order', async () => {
   // jsdom has no object URLs; the dialog uses them for thumbnails.
-  URL.createObjectURL = vi.fn(() => 'blob:preview');
+  URL.createObjectURL = vi.fn(() => `blob:preview-${Math.random()}`);
   URL.revokeObjectURL = vi.fn();
   const user = userEvent.setup();
   useDeckPageHandlers();
@@ -135,20 +148,12 @@ test('creates a card with images: uploads each via presign and records in order'
     http.post('http://localhost:8080/card', async () =>
       HttpResponse.json(makeCard({ id: 'card-2', question: 'What is DNA?' }), { status: 201 }),
     ),
-    http.get('http://localhost:8080/presigned-url', ({ request: req }) => {
-      const fileName = new URL(req.url).searchParams.get('fileName');
-      return HttpResponse.json({
-        presignedUrl: 'http://localhost:8080/s3-upload',
-        imageUrl: `https://cdn/${fileName}`,
-      });
-    }),
-    http.put('http://localhost:8080/s3-upload', () => new HttpResponse(null, { status: 200 })),
     http.post('http://localhost:8080/card-question-image', async ({ request: req }) => {
-      imagePosts.push(await req.json());
+      imagePosts.push(await readImageUpload(req));
       return HttpResponse.json(makeQuestionImage({ id: `qimg-${imagePosts.length}` }), { status: 201 });
     }),
   );
-  renderApp('/decks/deck-1');
+  const view = renderApp('/decks/deck-1');
   await user.click(await screen.findByRole('button', { name: 'New card' }));
   await user.type(screen.getByLabelText('Question'), 'What is DNA?');
   await user.upload(screen.getByLabelText('Card images file'), [
@@ -161,15 +166,16 @@ test('creates a card with images: uploads each via presign and records in order'
 
   await waitFor(() =>
     expect(imagePosts).toEqual([
-      { cardID: 'card-2', sequenceNumber: 1, imageURL: 'https://cdn/a.png' },
-      { cardID: 'card-2', sequenceNumber: 2, imageURL: 'https://cdn/b.png' },
+      { cardID: 'card-2', sequenceNumber: 1, bytes: 'a' },
+      { cardID: 'card-2', sequenceNumber: 2, bytes: 'b' },
     ]),
   );
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitForCreatedCardEditor(view);
 });
 
 test('removing a selected image before submit skips its upload', async () => {
-  URL.createObjectURL = vi.fn(() => 'blob:preview');
+  URL.createObjectURL = vi.fn(() => `blob:preview-${Math.random()}`);
   URL.revokeObjectURL = vi.fn();
   const user = userEvent.setup();
   useDeckPageHandlers();
@@ -178,20 +184,12 @@ test('removing a selected image before submit skips its upload', async () => {
     http.post('http://localhost:8080/card', async () =>
       HttpResponse.json(makeCard({ id: 'card-2', question: 'What is DNA?' }), { status: 201 }),
     ),
-    http.get('http://localhost:8080/presigned-url', ({ request: req }) => {
-      const fileName = new URL(req.url).searchParams.get('fileName');
-      return HttpResponse.json({
-        presignedUrl: 'http://localhost:8080/s3-upload',
-        imageUrl: `https://cdn/${fileName}`,
-      });
-    }),
-    http.put('http://localhost:8080/s3-upload', () => new HttpResponse(null, { status: 200 })),
     http.post('http://localhost:8080/card-question-image', async ({ request: req }) => {
-      imagePosts.push(await req.json());
+      imagePosts.push(await readImageUpload(req));
       return HttpResponse.json(makeQuestionImage(), { status: 201 });
     }),
   );
-  renderApp('/decks/deck-1');
+  const view = renderApp('/decks/deck-1');
   await user.click(await screen.findByRole('button', { name: 'New card' }));
   await user.type(screen.getByLabelText('Question'), 'What is DNA?');
   await user.upload(screen.getByLabelText('Card images file'), [
@@ -202,12 +200,74 @@ test('removing a selected image before submit skips its upload', async () => {
   await user.click(screen.getByRole('button', { name: 'Create' }));
 
   await waitFor(() =>
-    expect(imagePosts).toEqual([{ cardID: 'card-2', sequenceNumber: 1, imageURL: 'https://cdn/b.png' }]),
+    expect(imagePosts).toEqual([{ cardID: 'card-2', sequenceNumber: 1, bytes: 'b' }]),
   );
+  await waitForCreatedCardEditor(view);
+});
+
+test.each(['unauthorized', 'unknown-result'] as const)('retains a partially uploaded card after %s without replaying completed writes', async (failure) => {
+  const { testSession } = await import('../../test/auth');
+  URL.createObjectURL = vi.fn(() => `blob:preview-${Math.random()}`);
+  URL.revokeObjectURL = vi.fn();
+  useDeckPageHandlers();
+  let cardPosts = 0;
+  const uploads: unknown[] = [];
+  server.use(
+    http.post('http://localhost:8080/card', () => {
+      cardPosts++;
+      return HttpResponse.json(makeCard({ id: 'card-2', question: 'What is DNA?' }), { status: 201 });
+    }),
+    http.post('http://localhost:8080/card-question-image', async ({ request }) => {
+      uploads.push(await readImageUpload(request));
+      if (uploads.length === 2) {
+        if (failure === 'unauthorized') return HttpResponse.json({ message: 'Sign in' }, { status: 401 });
+        await testSession.lock();
+      }
+      return HttpResponse.json(makeQuestionImage({ id: `qimg-${uploads.length}`, cardID: 'card-2' }), { status: 201 });
+    }),
+  );
+  const view = renderApp('/decks/deck-1');
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'New card' }));
+  await user.type(screen.getByLabelText('Question'), 'What is DNA?');
+  await user.upload(screen.getByLabelText('Card images file'), [
+    new File(['a'], 'a.png', { type: 'image/png' }),
+    new File(['b'], 'b.png', { type: 'image/png' }),
+  ]);
+  await user.click(screen.getByRole('button', { name: 'Create' }));
+  await waitFor(() => expect(view.queryClient.isMutating()).toBe(0));
+  expect(testSession.status).toBe('locked');
+  expect(cardPosts).toBe(1);
+  expect(uploads).toHaveLength(2);
+  expect(screen.getByLabelText('Question')).toHaveValue('What is DNA?');
+  expect(screen.getByLabelText('Question')).toHaveAttribute('readonly');
+  expect(screen.getByRole('button', { name: 'Remove image 1' })).toBeDisabled();
+  expect(screen.getByAltText('Selected image 2')).toBeInTheDocument();
+  testSession.status = 'authenticated';
+
+  if (failure === 'unauthorized') {
+    await user.click(screen.getByRole('button', { name: 'Continue uploads' }));
+    await waitForCreatedCardEditor(view);
+    expect(cardPosts).toBe(1);
+    expect(uploads).toEqual([
+      { cardID: 'card-2', sequenceNumber: 1, bytes: 'a' },
+      { cardID: 'card-2', sequenceNumber: 2, bytes: 'b' },
+      { cardID: 'card-2', sequenceNumber: 2, bytes: 'b' },
+    ]);
+  } else {
+    expect(screen.queryByRole('button', { name: 'Continue uploads' })).not.toBeInTheDocument();
+    expect(screen.getByText(/may have completed/i)).toBeInTheDocument();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await user.click(screen.getByRole('button', { name: 'Open saved card' }));
+    confirm.mockRestore();
+    await waitForCreatedCardEditor(view);
+    expect(cardPosts).toBe(1);
+    expect(uploads).toHaveLength(2);
+  }
 });
 
 test('dropping files onto the dropzone adds them as pending images', async () => {
-  URL.createObjectURL = vi.fn(() => 'blob:preview');
+  URL.createObjectURL = vi.fn(() => `blob:preview-${Math.random()}`);
   URL.revokeObjectURL = vi.fn();
   useDeckPageHandlers();
   renderApp('/decks/deck-1');
@@ -221,8 +281,29 @@ test('dropping files onto the dropzone adds them as pending images', async () =>
   expect(await screen.findByAltText('Selected image 1')).toBeInTheDocument();
 });
 
+test.each(['unmount', 'discard'] as const)('releases draft image previews on %s', async (action) => {
+  URL.createObjectURL = vi.fn(() => 'blob:private-draft');
+  const revoke = vi.fn();
+  URL.revokeObjectURL = revoke;
+  useDeckPageHandlers();
+  const view = renderApp('/decks/deck-1');
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'New card' }));
+  await user.upload(screen.getByLabelText('Card images file'), new File(['a'], 'a.png', { type: 'image/png' }));
+  expect(screen.getByAltText('Selected image 1')).toHaveAttribute('src', 'blob:private-draft');
+  expect(revoke).not.toHaveBeenCalled();
+
+  if (action === 'unmount') view.unmount();
+  else {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    confirm.mockRestore();
+  }
+  expect(revoke).toHaveBeenCalledWith('blob:private-draft');
+});
+
 test('non-image files dropped on the dropzone are ignored with a toast', async () => {
-  URL.createObjectURL = vi.fn(() => 'blob:preview');
+  URL.createObjectURL = vi.fn(() => `blob:preview-${Math.random()}`);
   URL.revokeObjectURL = vi.fn();
   useDeckPageHandlers();
   renderApp('/decks/deck-1');
@@ -239,13 +320,13 @@ test('non-image files dropped on the dropzone are ignored with a toast', async (
     },
   });
 
-  expect(await screen.findByText('Only image files can be added')).toBeInTheDocument();
+  expect(await screen.findByText('Choose JPEG, PNG, GIF or WebP images.')).toBeInTheDocument();
   expect(screen.getByAltText('Selected image 1')).toBeInTheDocument();
   expect(screen.queryByAltText('Selected image 2')).not.toBeInTheDocument();
 });
 
 test('files over 10MB are rejected with a toast', async () => {
-  URL.createObjectURL = vi.fn(() => 'blob:preview');
+  URL.createObjectURL = vi.fn(() => `blob:preview-${Math.random()}`);
   URL.revokeObjectURL = vi.fn();
   useDeckPageHandlers();
   renderApp('/decks/deck-1');
@@ -258,12 +339,12 @@ test('files over 10MB are rejected with a toast', async () => {
     dataTransfer: { files: [big] },
   });
 
-  expect(await screen.findByText('Images must be 10MB or smaller')).toBeInTheDocument();
+  expect(await screen.findByText('Images must contain data and be 4 MiB or smaller.')).toBeInTheDocument();
   expect(screen.queryByAltText('Selected image 1')).not.toBeInTheDocument();
 });
 
 test('adding the same file twice keeps one copy and shows a toast', async () => {
-  URL.createObjectURL = vi.fn(() => 'blob:preview');
+  URL.createObjectURL = vi.fn(() => `blob:preview-${Math.random()}`);
   URL.revokeObjectURL = vi.fn();
   useDeckPageHandlers();
   renderApp('/decks/deck-1');
@@ -281,7 +362,7 @@ test('adding the same file twice keeps one copy and shows a toast', async () => 
 });
 
 test('submit shows per-image upload progress on the Create button', async () => {
-  URL.createObjectURL = vi.fn(() => 'blob:preview');
+  URL.createObjectURL = vi.fn(() => `blob:preview-${Math.random()}`);
   URL.revokeObjectURL = vi.fn();
   const user = userEvent.setup();
   useDeckPageHandlers();
@@ -294,23 +375,13 @@ test('submit shows per-image upload progress on the Create button', async () => 
     http.post('http://localhost:8080/card', async () =>
       HttpResponse.json(makeCard({ id: 'card-2', question: 'What is DNA?' }), { status: 201 }),
     ),
-    http.get('http://localhost:8080/presigned-url', ({ request: req }) => {
-      const fileName = new URL(req.url).searchParams.get('fileName');
-      return HttpResponse.json({
-        presignedUrl: 'http://localhost:8080/s3-upload',
-        imageUrl: `https://cdn/${fileName}`,
-      });
-    }),
-    http.put('http://localhost:8080/s3-upload', async () => {
+    http.post('http://localhost:8080/card-question-image', async () => {
       puts += 1;
       if (puts === 1) await firstUploadGate;
-      return new HttpResponse(null, { status: 200 });
+      return HttpResponse.json(makeQuestionImage(), { status: 201 });
     }),
-    http.post('http://localhost:8080/card-question-image', async () =>
-      HttpResponse.json(makeQuestionImage(), { status: 201 }),
-    ),
   );
-  renderApp('/decks/deck-1');
+  const view = renderApp('/decks/deck-1');
   await user.click(await screen.findByRole('button', { name: 'New card' }));
   await user.type(screen.getByLabelText('Question'), 'What is DNA?');
   await user.upload(screen.getByLabelText('Card images file'), [
@@ -323,6 +394,7 @@ test('submit shows per-image upload progress on the Create button', async () => 
   expect(await screen.findByRole('button', { name: /Uploading 1\/2/ })).toBeInTheDocument();
   releaseFirstUpload();
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitForCreatedCardEditor(view);
 });
 
 test('dismissing a dirty new-card dialog asks for confirmation', async () => {
@@ -358,7 +430,7 @@ test('dismissing a pristine new-card dialog closes without confirmation', async 
 });
 
 test('pasting an image into the dialog adds it as a pending image', async () => {
-  URL.createObjectURL = vi.fn(() => 'blob:preview');
+  URL.createObjectURL = vi.fn(() => `blob:preview-${Math.random()}`);
   URL.revokeObjectURL = vi.fn();
   useDeckPageHandlers();
   renderApp('/decks/deck-1');

@@ -1,3 +1,4 @@
+import { MediaImage } from '../../components/MediaImage';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
@@ -478,7 +479,7 @@ function ZoomableImage({
       }}
       className="block w-full cursor-zoom-in rounded-md focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none"
     >
-      <img
+      <MediaImage
         src={src}
         alt={alt}
         loading={lazy ? 'lazy' : undefined}
@@ -506,7 +507,7 @@ function Lightbox({ url, onClose }: { url: string; onClose: () => void }) {
       onClick={onClose}
       className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-black/80 p-4"
     >
-      <img src={url} alt="Enlarged view" className="max-h-full max-w-full rounded-md object-contain" />
+      <MediaImage src={url} alt="Enlarged view" className="max-h-full max-w-full rounded-md object-contain" />
     </div>
   );
 }
