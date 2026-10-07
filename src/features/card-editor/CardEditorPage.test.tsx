@@ -20,7 +20,7 @@ function useEditorHandlers(card = makeCard()) {
 
 test('prefills the question and tag selections', async () => {
   useEditorHandlers(makeCard({ tags: ['tag-1'] }));
-  renderApp('/cards/card-1');
+  renderApp('/cards/card-1/edit');
   expect(await screen.findByLabelText('Question')).toHaveValue('What is a mitochondrion?');
   expect(await screen.findByRole('checkbox', { name: 'exam' })).toBeChecked();
   expect(screen.getByRole('checkbox', { name: 'hard' })).not.toBeChecked();
@@ -38,7 +38,7 @@ test('saves the full payload, preserving memorized and omitting empty lastAccess
       return HttpResponse.json(makeCard({ question: 'Updated?', tags: ['tag-1', 'tag-2'], memorized: true }));
     }),
   );
-  renderApp('/cards/card-1');
+  renderApp('/cards/card-1/edit');
   const question = await screen.findByLabelText('Question');
   await user.clear(question);
   await user.type(question, 'Updated?');
@@ -63,7 +63,7 @@ test('includes lastAccessedDateTime in the payload when the card has one', async
       return HttpResponse.json(makeCard());
     }),
   );
-  renderApp('/cards/card-1');
+  renderApp('/cards/card-1/edit');
   await screen.findByLabelText('Question');
   await user.click(screen.getByRole('button', { name: 'Save' }));
 

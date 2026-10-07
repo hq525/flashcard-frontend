@@ -147,7 +147,7 @@ export function CardsPage() {
         onClose={() => setCreating(false)}
         onCreated={(card) => {
           setCreating(false);
-          navigate(`/cards/${card.id}`);
+          navigate(`/cards/${card.id}/edit`);
         }}
       />
       <ConfirmDialog

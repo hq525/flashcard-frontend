@@ -33,7 +33,7 @@ test('uploads a question image through the API with the next sequence number', a
       return HttpResponse.json(created, { status: 201 });
     }),
   );
-  renderApp('/cards/card-1');
+  renderApp('/cards/card-1/edit');
   const input = await screen.findByLabelText('Question images file');
   await user.upload(input, new File(['img-bytes'], 'new.png', { type: 'image/png' }));
 
@@ -59,7 +59,7 @@ test('dropping two files uploads both with consecutive sequence numbers', async 
       return HttpResponse.json(created, { status: 201 });
     }),
   );
-  renderApp('/cards/card-1');
+  renderApp('/cards/card-1/edit');
   const dropzone = await screen.findByLabelText('Question images: drop images or click to browse');
   fireEvent.drop(dropzone, {
     dataTransfer: {
@@ -89,7 +89,7 @@ test('pasting an image on a focused dropzone uploads it to that strip', async ()
       return HttpResponse.json(created, { status: 201 });
     }),
   );
-  renderApp('/cards/card-1');
+  renderApp('/cards/card-1/edit');
   const dropzone = await screen.findByLabelText('Question images: drop images or click to browse');
   dropzone.focus();
   fireEvent.paste(dropzone, {
@@ -116,7 +116,7 @@ test('reordering swaps the sequence numbers of adjacent images', async () => {
       return HttpResponse.json(makeQuestionImage({ id: id ?? '' }));
     }),
   );
-  renderApp('/cards/card-1');
+  renderApp('/cards/card-1/edit');
   await user.click(await screen.findByLabelText('Move Question images 1 right'));
 
   await waitFor(() => expect(puts).toHaveLength(2));
@@ -141,7 +141,7 @@ test('deletes an image after confirm', async () => {
       return HttpResponse.json(makeQuestionImage());
     }),
   );
-  renderApp('/cards/card-1');
+  renderApp('/cards/card-1/edit');
   await user.click(await screen.findByLabelText('Delete Question images 1'));
   const dialog = screen.getByRole('dialog', { name: 'Delete image' });
   await user.click(within(dialog).getByRole('button', { name: 'Delete' }));

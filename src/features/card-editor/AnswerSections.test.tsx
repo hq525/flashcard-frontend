@@ -39,7 +39,7 @@ test('adds a section with the next sequence number', async () => {
       return HttpResponse.json(created, { status: 201 });
     }),
   );
-  renderApp('/cards/card-1');
+  renderApp('/cards/card-1/edit');
   await user.click(await screen.findByRole('button', { name: 'Add section' }));
 
   await waitFor(() =>
@@ -59,7 +59,7 @@ test('saves edited title and answer with the full payload', async () => {
       return HttpResponse.json(makeSection({ title: 'Function' }));
     }),
   );
-  renderApp('/cards/card-1');
+  renderApp('/cards/card-1/edit');
   const title = await screen.findByLabelText('Title');
   await user.clear(title);
   await user.type(title, 'Function');
@@ -89,7 +89,7 @@ test('reordering swaps section sequence numbers with full payloads', async () =>
       return HttpResponse.json(makeSection());
     }),
   );
-  renderApp('/cards/card-1');
+  renderApp('/cards/card-1/edit');
   await user.click(await screen.findByLabelText('Move section 1 down'));
 
   await waitFor(() => expect(puts).toHaveLength(2));
@@ -114,7 +114,7 @@ test('deletes a section after an image-cascade confirm', async () => {
       return HttpResponse.json(makeSection());
     }),
   );
-  renderApp('/cards/card-1');
+  renderApp('/cards/card-1/edit');
   await user.click(await screen.findByRole('button', { name: 'Delete section' }));
   const dialog = screen.getByRole('dialog', { name: 'Delete section' });
   expect(within(dialog).getByText(/Its images will be deleted too/)).toBeInTheDocument();
@@ -133,7 +133,7 @@ test('uploads a section image to its typed parent', async () => {
       return HttpResponse.json(makeSectionImage({ imageURL: 'https://cdn/ans.png' }), { status: 201 });
     }),
   );
-  renderApp('/cards/card-1');
+  renderApp('/cards/card-1/edit');
   const input = await screen.findByLabelText('Section 1 images file');
   await user.upload(input, new File(['b'], 'ans.png', { type: 'image/png' }));
 
@@ -155,7 +155,7 @@ test('dropping a file on a section dropzone uploads it', async () => {
       return HttpResponse.json(makeSectionImage({ imageURL: 'https://cdn/ans.png' }), { status: 201 });
     }),
   );
-  renderApp('/cards/card-1');
+  renderApp('/cards/card-1/edit');
   const dropzone = await screen.findByLabelText('Section 1 images: drop images or click to browse');
   fireEvent.drop(dropzone, {
     dataTransfer: { files: [new File(['b'], 'ans.png', { type: 'image/png' })] },
