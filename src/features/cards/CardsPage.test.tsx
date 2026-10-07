@@ -14,7 +14,7 @@ function useDeckPageHandlers(cards = [makeCard()]) {
       expect(new URL(req.url).searchParams.get('deckId')).toBe('deck-1');
       return HttpResponse.json(cards);
     }),
-    // The create test navigates to /cards/card-2; the editor page fetches
+    // The create test navigates to /cards/card-2/edit; the editor page fetches
     // these on arrival.
     http.get('http://localhost:8080/card', () =>
       HttpResponse.json(makeCard({ id: 'card-2', question: 'What is DNA?' })),
@@ -37,7 +37,7 @@ async function waitForCreatedCardEditor(view: ReturnType<typeof renderApp>) {
   expect(screen.getByLabelText('Question')).toHaveValue('What is DNA?');
 }
 
-test('lists cards with memorized badge, tag chips, and editor links', async () => {
+test('lists cards with memorized badge, tag chips, and preview links', async () => {
   useDeckPageHandlers([
     makeCard({ tags: ['tag-1'], memorized: true }),
     makeCard({ id: 'card-2', question: 'What is DNA?' }),

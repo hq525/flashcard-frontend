@@ -154,6 +154,7 @@ export function CardEditorPage() {
   if (deck.data) {
     crumbs.push({ label: deck.data.name, to: `/decks/${deck.data.id}` });
   }
+  crumbs.push({ label: 'View card', to: `/cards/${card.data.id}` });
   crumbs.push({ label: 'Edit card' });
 
   return (

@@ -2,6 +2,8 @@
 
 React SPA for the [Flashcard-Lambda](https://github.com/hq525/Flashcard-Lambda) Go backend: browse categories, decks and cards, edit answers, images and tags, and study with spaced repetition. This deployment is a private library for one owner.
 
+Select a card in a deck to view its question and answer as a flippable card, including images you can enlarge. Click the card or focus it and press Enter/Space to flip. Viewing does not record a review or change its schedule. Use **Edit** at the top to open the editor, and its **View card** breadcrumb to return. Newly created cards open directly in the editor so you can add their answers.
+
 ## Reviewing the project
 
 The source, tests and architecture documentation are available for portfolio review. The deployed library requires its owner's login. `npm test` runs against synthetic fixtures without AWS credentials; use an isolated deployment and sample study content for demos or screenshots.

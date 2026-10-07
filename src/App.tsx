@@ -5,6 +5,7 @@ import { ToastProvider } from './components/Toast';
 import { CategoriesPage } from './features/categories/CategoriesPage';
 import { CardsPage } from './features/cards/CardsPage';
 import { CardEditorPage } from './features/card-editor/CardEditorPage';
+import { CardPreviewPage } from './features/card-preview/CardPreviewPage';
 import { DecksPage } from './features/decks/DecksPage';
 import { NotFoundPage } from './features/NotFoundPage';
 import { StudyPage } from './features/study/StudyPage';
@@ -19,7 +20,8 @@ export function AppRoutes() {
         <Route path="/tags" element={<TagsPage />} />
         <Route path="/categories/:categoryId" element={<DecksPage />} />
         <Route path="/decks/:deckId" element={<CardsPage />} />
-        <Route path="/cards/:cardId" element={<CardEditorPage />} />
+        <Route path="/cards/:cardId" element={<CardPreviewPage />} />
+        <Route path="/cards/:cardId/edit" element={<CardEditorPage />} />
         <Route path="/decks/:deckId/study" element={<StudyPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
