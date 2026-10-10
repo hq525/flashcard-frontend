@@ -3,6 +3,7 @@ import { acceptedImageTypes, imageHelp, validateImageFile } from '../../api/medi
 import { useRef, useState } from 'react';
 import { Button } from '../../components/Button';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Lightbox } from '../../components/Lightbox';
 import { ArrowLeftIcon, ArrowRightIcon, PlusIcon, XIcon } from '../../components/icons';
 import { useToast } from '../../components/Toast';
 
@@ -29,6 +30,7 @@ export function ImageStrip({ title, images, onUpload, onDelete, onSwap }: ImageS
   const { showToast } = useToast();
   const [deleting, setDeleting] = useState<StripImage | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [zoomUrl, setZoomUrl] = useState<string | null>(null);
   const sorted = [...images].sort((a, b) => a.sequenceNumber - b.sequenceNumber);
 
   // accept={acceptedImageTypes} only guards the file picker; drops can contain anything.
@@ -48,11 +50,18 @@ export function ImageStrip({ title, images, onUpload, onDelete, onSwap }: ImageS
       <ul className="flex gap-3 overflow-x-auto pb-1">
         {sorted.map((image, i) => (
           <li key={image.id} className="flex shrink-0 flex-col gap-1">
-            <MediaImage
-              src={image.imageURL}
-              alt={`${title} ${i + 1}`}
-              className="h-32 w-32 rounded-md border border-gray-200 object-cover"
-            />
+            <button
+              type="button"
+              aria-label={`Enlarge ${title} ${i + 1}`}
+              onClick={() => setZoomUrl(image.imageURL)}
+              className="cursor-zoom-in rounded-md focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none"
+            >
+              <MediaImage
+                src={image.imageURL}
+                alt={`${title} ${i + 1}`}
+                className="h-32 w-32 rounded-md border border-gray-200 object-cover"
+              />
+            </button>
             <div className="flex justify-center gap-1">
               <Button
                 variant="ghost"
@@ -129,6 +138,7 @@ export function ImageStrip({ title, images, onUpload, onDelete, onSwap }: ImageS
           e.target.value = '';
         }}
       />
+      {zoomUrl && <Lightbox url={zoomUrl} onClose={() => setZoomUrl(null)} />}
       <ConfirmDialog
         open={deleting !== null}
         title="Delete image"

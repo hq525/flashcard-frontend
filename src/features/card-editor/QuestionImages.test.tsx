@@ -148,3 +148,13 @@ test('deletes an image after confirm', async () => {
 
   await waitFor(() => expect(deleteId).toBe('qimg-1'));
 });
+
+test('clicking a question image enlarges it; Escape closes it', async () => {
+  const user = userEvent.setup();
+  useEditorHandlers([makeQuestionImage()]);
+  renderApp('/cards/card-1/edit');
+  await user.click(await screen.findByRole('button', { name: 'Enlarge Question images 1' }));
+  expect(screen.getByRole('dialog', { name: 'Image preview' })).toBeInTheDocument();
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('dialog', { name: 'Image preview' })).not.toBeInTheDocument();
+});
